@@ -1,4 +1,7 @@
+from typing import List
+
 import jax
+import jax.numpy as jnp
 
 def infer_device(device_preference: str = None):
     """
@@ -42,3 +45,9 @@ def put_on_device(device=None, *data_items):
         device = infer_device(device)
         return tuple(jax.device_put(item, device) for item in data_items)
     return data_items
+
+
+def split_in_batches(array: jnp.ndarray, batch_size: int = 200) -> List[jnp.ndarray]:
+    """Splits array into batches"""
+    num_batches = (array.shape[0] + batch_size - 1) // batch_size
+    return [array[i * batch_size:(i + 1) * batch_size] for i in range(num_batches)]

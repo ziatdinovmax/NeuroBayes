@@ -8,7 +8,7 @@ import numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS, init_to_median
 
 from .priors import GPPriors
-from .utils import put_on_device
+from .utils import put_on_device, split_in_batches
 
 kernel_fn_type = Callable[[jnp.ndarray, jnp.ndarray, Dict[str, jnp.ndarray], jnp.ndarray],  jnp.ndarray]
 
@@ -161,14 +161,32 @@ class GP:
         X_new = self.set_data(X_new)
         samples = self.get_samples(chain_dim=False)
         self.X, self.y, X_new, samples = put_on_device(
-            device, self.X, self.y, X_new, samples)
-        
+            device, self.X_train, self.y_train, X_new, samples)
+
         predictive = lambda p: self.compute_gp_posterior(
             X_new, self.X_train, self.y_train, p, noiseless)
         # Compute predictive mean and covariance for all HMC samples
         mu_all, cov_all = vmap(predictive)(samples)
         # Return predictive mean and variance averaged over the HMC samples
         return mu_all.mean(0), cov_all.mean(0).diagonal()
+
+    def predict_in_batches(self, X_new: jnp.ndarray,
+                           batch_size: int = 200,
+                           noiseless: bool = True,
+                           device: str = None
+                           ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        """
+        Make prediction in batches (to avoid memory overflow) 
+        at X_new points a trained GP model
+        """
+        mean, var = [], []
+        for x in split_in_batches(X_new, batch_size):
+            mean_i, var_i = self.predict(x, noiseless, device)
+            mean_i = jax.device_put(mean_i, jax.devices("cpu")[0])
+            var_i = jax.device_put(var_i, jax.devices("cpu")[0])
+            mean.append(mean_i)
+            var.append(var_i)
+        return jnp.concatenate(mean), jnp.concatenate(var)
 
     def draw_from_mvn(self,
                       rng_key: jnp.ndarray,
@@ -210,7 +228,7 @@ class GP:
                 is performed on the JAX default device.
             rng_key:
                 Optional random number generator key
-        
+
         Returns:
             A set of samples from the posterior predictive distribution.
 
@@ -220,7 +238,7 @@ class GP:
         samples = self.get_samples(chain_dim=False)
         self.X, self.y, X_new, samples = put_on_device(
             device, self.X, self.y, X_new, samples)
-        
+
         num_samples = len(next(iter(samples.values())))
         vmap_args = (jra.split(key, num_samples), samples)
         predictive = lambda p1, p2: self.draw_from_mvn(p1, X_new, p2, n_draws, noiseless)
