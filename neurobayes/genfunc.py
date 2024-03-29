@@ -121,7 +121,7 @@ def rays2d():
     x_values = np.linspace(0.5, 5, 100)
     y_values = np.linspace(0.5, 5, 100)
     x_grid, y_grid = np.meshgrid(x_values, y_values)
-    X_domain = np.vstack((x_grid.flatten(), y_grid.flatten()))
+    X_domain = np.vstack((x_grid.flatten(), y_grid.flatten())).T
 
     # Pre-calculate width and intensity factors for consistency
     np.random.seed(42)
@@ -139,7 +139,7 @@ def rays2d():
         Returns:
         - np.ndarray: An array of ray intensities for the specified indices.
         """
-        x, y = X_domain[indices]
+        x, y = X_domain[indices].T
 
         angles = np.arctan2(y - origin[1], x - origin[0]) % (2 * np.pi)
         distance = np.sqrt((x - origin[0])**2 + (y - origin[1])**2)
@@ -158,7 +158,7 @@ def rays2d():
     return X_domain, rays_function
 
 
-def phase_transition2d(X_domain):
+def phase_transition2d():
     """
     Generates a function to compute the behavior of a 2D phase transition system at specified indices within a predefined domain.
     Returns the domain of points and the generated function. This function is designed for scenarios where the evaluation
@@ -169,7 +169,7 @@ def phase_transition2d(X_domain):
     X = np.linspace(-3, 3, 100)
     Y = np.linspace(-3, 3, 100)
     XX, YY = np.meshgrid(X, Y)
-    X_domain = np.vstack((XX.flatten(), YY.flatten()))
+    X_domain = np.vstack((XX.flatten(), YY.flatten())).T
 
     def phase_transition_function(indices):
         """
@@ -184,7 +184,7 @@ def phase_transition2d(X_domain):
                       transition curve.
         """
         # Select the points based on the provided indices and transpose for easy unpacking
-        x, y = X_domain[indices]
+        x, y = X_domain[indices].T
 
         curve = np.sin(x)
         above_curve = y > curve
