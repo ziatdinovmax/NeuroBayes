@@ -1,4 +1,5 @@
 from typing import Dict, Tuple, Optional, Union, List
+import jax
 import jax.random as jra
 import jax.numpy as jnp
 from jax import vmap
@@ -9,7 +10,7 @@ from numpyro.infer import MCMC, NUTS, init_to_median
 
 from .nn import get_mlp
 from .priors import get_mlp_prior
-from .utils import put_on_device
+from .utils import put_on_device, split_in_batches
 
 
 class BNN:
@@ -123,6 +124,25 @@ class BNN:
         if rng_key is None:
             rng_key = jra.PRNGKey(0)
         return self._vmap_predict(X_new, n_draws, rng_key, device)
+
+    def predict_in_batches(self, X_new: jnp.ndarray,
+                           batch_size: int = 200,
+                           n_draws: int = 1,
+                           device: str = None,
+                           rng_key: jnp.ndarray = None
+                           ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+        """
+        Make prediction in batches (to avoid memory overflow)
+        at X_new points a trained BNN model
+        """
+        mean, var = [], []
+        for x in split_in_batches(X_new, batch_size):
+            mean_i, var_i = self.predict(x, n_draws, device, rng_key)
+            mean_i = jax.device_put(mean_i, jax.devices("cpu")[0])
+            var_i = jax.device_put(var_i, jax.devices("cpu")[0])
+            mean.append(mean_i)
+            var.append(var_i)
+        return jnp.concatenate(mean), jnp.concatenate(var)
 
     def sample_from_posterior(self,
                               X_new: jnp.ndarray,
