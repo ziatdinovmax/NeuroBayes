@@ -105,7 +105,7 @@ def nonstationary3():
     return (x_start, x_stop), f
 
 
-def rays2d():
+def rays2d(grid_density=50):
     """
     Generates a function to compute the intensity of rays over a 2D domain, given a set of indices. Returns
     the domain of points and the generated function. This function is designed for scenarios where the evaluation
@@ -118,8 +118,8 @@ def rays2d():
     intensity_range = (1, 3)  # Range for the intensity factors
 
     # Define a domain of points
-    x_values = np.linspace(0.5, 5, 100)
-    y_values = np.linspace(0.5, 5, 100)
+    x_values = np.linspace(0.5, 5, grid_density)
+    y_values = np.linspace(0.5, 5, grid_density)
     x_grid, y_grid = np.meshgrid(x_values, y_values)
     X_domain = np.vstack((x_grid.flatten(), y_grid.flatten())).T
 
@@ -158,20 +158,20 @@ def rays2d():
     return X_domain, rays_function
 
 
-def phase_transition2d():
+def phases2d(grid_density=50):
     """
-    Generates a function to compute the behavior of a 2D phase transition system at specified indices within a predefined domain.
+    Generates a function to emulate a behavior of a 2D phase transition system at specified indices within a predefined domain.
     Returns the domain of points and the generated function. This function is designed for scenarios where the evaluation
     of phase transition behavior is needed at specific points within a larger, predefined domain, such as in optimization
     or active learning contexts.
     """
     # Define a domain of points
-    X = np.linspace(-3, 3, 100)
-    Y = np.linspace(-3, 3, 100)
+    X = np.linspace(-3, 3, grid_density)
+    Y = np.linspace(-3, 3, grid_density)
     XX, YY = np.meshgrid(X, Y)
     X_domain = np.vstack((XX.flatten(), YY.flatten())).T
 
-    def phase_transition_function(indices):
+    def phases2d_function(indices):
         """
         Computes the values of a 2D phase transition function at points specified by their indices within the predefined domain.
 
@@ -200,4 +200,4 @@ def phase_transition2d():
 
         return z
 
-    return X_domain, phase_transition_function
+    return X_domain, phases2d_function
