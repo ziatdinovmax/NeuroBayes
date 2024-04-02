@@ -23,7 +23,7 @@ class BNN:
                  noise_prior: Optional[dist.Distribution] = None
                  ) -> None:
         if noise_prior is None:
-            noise_prior = dist.LogNormal(0.0, 1.0)
+            noise_prior = dist.HalfNormal(1.0)
         hdim = hidden_dim if hidden_dim is not None else [32, 16, 8]
         self.nn = get_mlp(hdim, activation)
         self.nn_prior = get_mlp_prior(input_dim, output_dim, hdim)
