@@ -1,7 +1,10 @@
-from typing import List
+from typing import List, Dict
 
 import jax
 import jax.numpy as jnp
+
+import numpy as np
+
 
 def infer_device(device_preference: str = None):
     """
@@ -11,7 +14,7 @@ def infer_device(device_preference: str = None):
 
     Args:
     - device_preference (str, optional): The preferred device type ('cpu' or 'gpu').
-    
+
     Returns:
     - A JAX device.
     """
@@ -51,3 +54,27 @@ def split_in_batches(array: jnp.ndarray, batch_size: int = 200) -> List[jnp.ndar
     """Splits array into batches"""
     num_batches = (array.shape[0] + batch_size - 1) // batch_size
     return [array[i * batch_size:(i + 1) * batch_size] for i in range(num_batches)]
+
+
+def split_dict(data: Dict[str, jnp.ndarray], chunk_size: int
+               ) -> List[Dict[str, jnp.ndarray]]:
+    """Splits a dictionary of arrays into a list of smaller dictionaries.
+
+    Args:
+        data: Dictionary containing numpy arrays.
+        chunk_size: Desired size of the smaller arrays.
+
+    Returns:
+        List of dictionaries with smaller numpy arrays.
+    """
+    N = len(next(iter(data.values())))
+    num_chunks = int(np.ceil(N / chunk_size))
+    result = []
+    for i in range(num_chunks):
+        start_idx = i * chunk_size
+        end_idx = min((i+1) * chunk_size, N)
+
+        chunk = {key: value[start_idx:end_idx] for key, value in data.items()}
+        result.append(chunk)
+
+    return result
