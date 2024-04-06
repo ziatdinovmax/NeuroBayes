@@ -10,7 +10,7 @@ from numpyro.infer import MCMC, NUTS, init_to_median
 
 from .nn import get_mlp
 from .priors import get_mlp_prior
-from .utils import put_on_device, split_in_batches
+from .utils import put_on_device, split_dict
 
 
 class BNN:
@@ -100,8 +100,8 @@ class BNN:
     def predict(self,
                 X_new: jnp.ndarray,
                 n_draws: int = 1,
-                device: str = None,
-                rng_key: jnp.ndarray = None,
+                device: Optional[str] = None,
+                rng_key: Optional[jnp.ndarray] = None
                 ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """
         Predict the mean and variance of the target values for new inputs.
@@ -112,59 +112,67 @@ class BNN:
             n_draws:
                 Number of draws to sample from the posterior predictive distribution.
             device:
-                    The device (e.g. "cpu" or "gpu") perform computation on ('cpu', 'gpu'). If None, computation
-                    is performed on the JAX default device.
+                The device (e.g. "cpu" or "gpu") perform computation on ('cpu', 'gpu'). If None, computation
+                is performed on the JAX default device.
             rng_key:
                 Random number generator key for JAX operations.
 
         Returns:
             Tuple containing the means and samples from the posterior predictive distribution.
         """
-        X_new = self.set_data(X_new)
-        if rng_key is None:
-            rng_key = jra.PRNGKey(0)
-        return self._vmap_predict(X_new, n_draws, rng_key, device)
+        mean, f_samples = self._vmap_predict(X_new, None, n_draws, rng_key, device)
+        return mean, f_samples.var(0)
 
     def predict_in_batches(self, X_new: jnp.ndarray,
-                           batch_size: int = 200,
+                           batch_size: int = 100,
                            n_draws: int = 1,
-                           device: str = None,
-                           rng_key: jnp.ndarray = None
+                           device: Optional[str] = None,
+                           rng_key: Optional[jnp.ndarray] = None
                            ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """
         Make prediction in batches (to avoid memory overflow)
         at X_new points a trained BNN model
         """
-        mean, var = [], []
-        for x in split_in_batches(X_new, batch_size):
-            mean_i, var_i = self.predict(x, n_draws, device, rng_key)
+        samples = self.get_samples(chain_dim=False)
+        mean_chunks, f_samples_chunks = [], []
+        for batch in split_dict(samples, batch_size):
+            mean_i, f_samples_i = self._vmap_predict(X_new, batch, n_draws, rng_key, device)
             mean_i = jax.device_put(mean_i, jax.devices("cpu")[0])
-            var_i = jax.device_put(var_i, jax.devices("cpu")[0])
-            mean.append(mean_i)
-            var.append(var_i)
-        return jnp.concatenate(mean), jnp.concatenate(var)
+            f_samples_i = jax.device_put(f_samples_i, jax.devices("cpu")[0])
+            mean_chunks.append(mean_i[None])
+            f_samples_chunks.append(f_samples_i)
+        mean_chunks = jnp.concatenate(mean_chunks, axis=0)
+        f_samples_chunks = jnp.concatenate(f_samples_chunks)
+        
+        return mean_chunks.mean(0), f_samples_chunks.var(0)
 
     def sample_from_posterior(self,
                               X_new: jnp.ndarray,
                               n_draws: int = 1,
-                              device: str = None,
+                              device: Optional[str] = None,
                               rng_key: Optional[jnp.ndarray] = None
                               ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """
         Predict the mean and variance of the target values for new inputs
         """
-        X_new = self.set_data(X_new)
-        if rng_key is None:
-            rng_key = jra.PRNGKey(0)
-        _, f_samples = self._vmap_predict(X_new, n_draws, rng_key, device)
+        _, f_samples = self._vmap_predict(X_new, None, n_draws, rng_key, device)
         return f_samples
 
-    def _vmap_predict(self, X_new: jnp.ndarray, n_draws: int, rng_key: jnp.ndarray,
-                      device: str = None) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    def _vmap_predict(self,
+                      X_new: jnp.ndarray,
+                      samples: Dict[str, jnp.ndarray] = None,
+                      n_draws: int = 1,
+                      rng_key: Optional[jnp.ndarray] = None,
+                      device: Optional[str] = None
+                      ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """
         Helper method to vectorize predictions over posterior samples
         """
-        samples = self.get_samples(chain_dim=False)
+        X_new = self.set_data(X_new)
+        if rng_key is None:
+            rng_key = jra.PRNGKey(0)
+        if samples is None:
+            samples = self.get_samples(chain_dim=False)
         X_new, samples = put_on_device(device, X_new, samples)
         num_samples = len(next(iter(samples.values())))
         vmap_args = (jra.split(rng_key, num_samples), samples)
@@ -172,7 +180,7 @@ class BNN:
         predictive = lambda p1, p2: self.sample_single_posterior_predictive(p1, X_new, p2, n_draws)
         loc, f_samples = vmap(predictive)(*vmap_args)
 
-        return loc.mean(0), f_samples.var(0)
+        return loc.mean(0), f_samples
 
     def set_data(self, X: jnp.ndarray, y: Optional[jnp.ndarray] = None
                  ) -> Union[Tuple[jnp.ndarray], jnp.ndarray]:
