@@ -167,8 +167,15 @@ class GP:
             X_new, self.X_train, self.y_train, p, noiseless)
         # Compute predictive mean and covariance for all HMC samples
         mu_all, cov_all = vmap(predictive)(samples)
-        # Return predictive mean and variance averaged over the HMC samples
-        return mu_all.mean(0), cov_all.mean(0).diagonal()
+        # Calculate the average of the means
+        mean_predictions = mu_all.mean(axis=0)
+        # Calculate the average within-model variance and variance of the means
+        average_within_model_variance = cov_all.mean(axis=0)
+        variance_of_means = jnp.var(mu_all, axis=0)
+        # Total predictive variance
+        total_predictive_variance = average_within_model_variance + variance_of_means
+
+        return mean_predictions, total_predictive_variance
 
     def predict_in_batches(self, X_new: jnp.ndarray,
                            batch_size: int = 200,
