@@ -170,7 +170,7 @@ class GP:
         # Calculate the average of the means
         mean_predictions = mu_all.mean(axis=0)
         # Calculate the average within-model variance and variance of the means
-        average_within_model_variance = cov_all.mean(axis=0)
+        average_within_model_variance = cov_all.mean(axis=0).diagonal()
         variance_of_means = jnp.var(mu_all, axis=0)
         # Total predictive variance
         total_predictive_variance = average_within_model_variance + variance_of_means
