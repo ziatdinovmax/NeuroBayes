@@ -53,14 +53,11 @@ def nonstationary1():
     """
     Generates a nonstationary function and its domain
     """
-    x_start = 0.2
-    x_stop = 4.8
+    x_start = 0
+    x_stop = 20
 
     def f(x):
-        transition = 1 / (1 + np.exp(-10 * (x - np.pi)))
-        smooth_part = np.sin(2 * x)
-        non_smooth_part = 0.3 * np.sin(30 * x) + 0.3 * np.cos(10 * x)
-        return (1 - transition) * smooth_part + transition * non_smooth_part
+        return np.where(x < 10, np.sin(np.pi * x / 5) + 0.2 * np.cos(4 * np.pi * x / 4.9), x / 15 - 1)
 
     return (x_start, x_stop), f
 
@@ -201,3 +198,21 @@ def phases2d(grid_density=50):
         return z
 
     return X_domain, phases2d_function
+
+
+def get_ising_data(array_key):
+    data = np.load("/home/ubuntu/code/NeuroBayes/ising_data.npz")
+    array = data[array_key]
+
+    height, width = array.shape
+    y_coords, x_coords = np.mgrid[0:height, 0:width]
+    X_full = np.column_stack((y_coords.ravel(), x_coords.ravel()))
+    y_full = array.ravel()
+
+    return X_full, y_full
+
+def ising_mag():
+    return get_ising_data("magnetization")
+
+def ising_heat():
+    return get_ising_data("heat_capacity")
