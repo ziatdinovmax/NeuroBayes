@@ -28,7 +28,7 @@ def infer_device(device_preference: str = None):
             return devices_of_type[0]
         else:
             print(f"No devices of type '{device_preference}' found. Falling back to the default device.")
-    
+
     # If no preference is specified or no devices of the specified type are found, return the default device.
     return jax.devices()[0]
 
@@ -78,3 +78,43 @@ def split_dict(data: Dict[str, jnp.ndarray], chunk_size: int
         result.append(chunk)
 
     return result
+
+
+def mse(y_pred: jnp.ndarray, y_true: jnp.ndarray) -> jnp.ndarray:
+    """
+    Calculates the mean squared error between true and predicted values.
+    """
+    # Compute the mean squared error
+    mse = jnp.mean((y_true - y_pred) ** 2)
+    return mse
+
+
+def nlpd(y: jnp.ndarray, mu: jnp.ndarray, sigma_squared: jnp.ndarray,
+         eps: float = 1e-6) -> jnp.ndarray:
+    """
+    Computes the Negative Log Predictive Density (NLPD) for observed data points
+    given the predictive mean and variance.
+
+    Parameters:
+        y (np.array): Array of observed values
+        mu (np.array): Array of predictive means from the model
+        sigma_squared (np.array): Array of predictive variances from the model
+
+    Returns:
+        The NLPD value
+    """
+    sigma_squared += eps
+    # Constants for the normal distribution's probability density function
+    const = -0.5 * jnp.log(2 * jnp.pi * sigma_squared)
+    # The squared differences divided by the variance
+    diff_squared = (y - mu) ** 2
+    probability_density = -0.5 * diff_squared / sigma_squared
+
+    # Log probability is the sum of the constant and probability density components
+    log_prob = const + probability_density
+
+    # Compute the NLPD by averaging and negating the log probabilities
+    nlpd = -jnp.mean(log_prob)
+
+    return nlpd
+
