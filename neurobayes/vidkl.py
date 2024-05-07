@@ -35,6 +35,7 @@ class VIDKL(DKL):
     def fit(self, X: jnp.ndarray, y: jnp.ndarray,
             num_steps: int = 1000, step_size: float = 5e-3,
             progress_bar: bool = True,
+            print_summary: bool = True,
             device: str = None,
             rng_key: jnp.array = None,
             **kwargs: float
@@ -49,6 +50,9 @@ class VIDKL(DKL):
             num_steps: number of SVI steps
             step_size: step size schedule for Adam optimizer
             progress_bar: show progress bar
+            device:
+                The device (e.g. "cpu" or "gpu") perform computation on ('cpu', 'gpu'). If None, computation
+                is performed on the JAX default device.
             print_summary: print summary at the end of training
             rng_key: random number generator key
         """
@@ -74,14 +78,16 @@ class VIDKL(DKL):
 
         self.params = self.svi.guide.median(params)
 
+        if print_summary:
+            self.print_summary()
+
     def get_samples(self, **kwargs):
         return {k: v[None] for (k, v) in self.params.items()}
 
     def print_summary(self, print_nn_weights: bool = False) -> None:
-        samples = self.get_samples(1)
-        if print_nn_weights:
-            numpyro.diagnostics.print_summary(samples)
-        else:
-            list_of_keys = ["k_scale", "k_length", "noise"]
-        numpyro.diagnostics.print_summary(
-            {k: v for (k, v) in samples.items() if k in list_of_keys})
+        list_of_keys = ["k_scale", "k_length", "noise"]
+        print('\nInferred GP kernel parameters')
+        for (k, vals) in self.params.items():
+            if k in list_of_keys:
+                spaces = " " * (15 - len(k))
+                print(k, spaces, jnp.around(vals, 4))
