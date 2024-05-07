@@ -41,3 +41,21 @@ def get_mlp_prior(input_dim: int, output_dim: int, architecture: List[int]) -> C
         params[f"b{len(architecture)}"] = sample_biases(f"b{len(architecture)}", output_dim)
         return params
     return mlp_prior
+
+
+def get_heteroskedastic_mlp_prior(input_dim: int, output_dim: int, architecture: List[int]) -> Callable[[], Dict[str, jnp.ndarray]]:
+    """Priors over weights and biases for a Bayesian MLP with heteroskedastic outputs"""
+    def mlp_prior():
+        params = {}
+        in_channels = input_dim
+        for i, out_channels in enumerate(architecture):
+            params[f"w{i}"] = sample_weights(f"w{i}", in_channels, out_channels)
+            params[f"b{i}"] = sample_biases(f"b{i}", out_channels)
+            in_channels = out_channels
+        # Output layers for mean and variance
+        params['w_mean'] = sample_weights('w_mean', in_channels, output_dim)
+        params['b_mean'] = sample_biases('b_mean', output_dim)
+        params['w_variance'] = sample_weights('w_variance', in_channels, output_dim)
+        params['b_variance'] = sample_biases('b_variance', output_dim)
+        return params
+    return mlp_prior
