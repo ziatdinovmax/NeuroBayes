@@ -35,6 +35,7 @@ class VIDKL(DKL):
     def fit(self, X: jnp.ndarray, y: jnp.ndarray,
             num_steps: int = 1000, step_size: float = 5e-3,
             progress_bar: bool = True,
+            device: str = None,
             rng_key: jnp.array = None,
             **kwargs: float
             ) -> None:
@@ -53,7 +54,7 @@ class VIDKL(DKL):
         """
         key = rng_key if rng_key is not None else jra.PRNGKey(0)
         X, y = self.set_data(X, y)
-        X, y = put_on_device(X, y)
+        X, y = put_on_device(device, X, y)
         self.X_train = X
         self.y_train = y
 
