@@ -39,7 +39,7 @@ class VIDKL(DKL):
             **kwargs: float
             ) -> None:
         """
-        Run variational inference to learn GP (hyper)parameters
+        Run variational inference to learn DKL (hyper)parameters
 
         Args:
             rng_key: random number generator key
