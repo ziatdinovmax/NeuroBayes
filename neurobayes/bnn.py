@@ -14,6 +14,16 @@ from .utils import put_on_device, split_dict
 
 
 class BNN:
+    """
+    A Fully Bayesian Neural Network.
+    This approach employs a probabilistic treatment of all neural network weights,
+    treating them as random variables with specified prior distributions
+    and utilizing advanced Markov Chain Monte Carlo techniques to sample directly
+    from the posterior distribution, allowing to account for all plausible weight configurations.
+    This approach enables the network to make probabilistic predictions,
+    not just single-point estimates but entire distributions of possible outcomes,
+    quantifying the inherent uncertainty.
+    """
 
     def __init__(self,
                  input_dim: int,
