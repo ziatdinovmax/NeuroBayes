@@ -19,8 +19,9 @@ class HeteroskedasticBNN(BNN):
         super().__init__(input_dim, output_dim, hidden_dim, activation)
 
         # Override the MLP functions with heteroskedastic versions
-        self.nn = get_heteroskedastic_mlp(self.hidden_dim, self.activation)
-        self.nn_prior = get_heteroskedastic_mlp_prior(self.input_dim, self.hidden_dim)
+        hdim = hidden_dim if hidden_dim is not None else [32, 16, 8]
+        self.nn = get_heteroskedastic_mlp(hdim, activation)
+        self.nn_prior = get_heteroskedastic_mlp_prior(input_dim, output_dim, hdim)
 
     def model(self, X: jnp.ndarray, y: jnp.ndarray = None, **kwargs) -> None:
         """BNN probabilistic model"""
