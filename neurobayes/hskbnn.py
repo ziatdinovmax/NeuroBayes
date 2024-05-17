@@ -1,4 +1,5 @@
 from typing import List
+import jax
 import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
@@ -38,3 +39,10 @@ class HeteroskedasticBNN(BNN):
         loc, sigma = self.nn(X_new, params)
         sample = dist.Normal(loc, sigma).sample(rng_key, (n_draws,)).mean(0)
         return loc, sample
+
+    def predict_noise(self, X_new: jnp.ndarray) -> jnp.ndarray:
+        X_new = self.set_data(X_new)
+        samples = self.get_samples(chain_dim=False)
+        predictive = jax.vmap(lambda params: self.nn(X_new, params))
+        sigma = predictive(samples)[-1]
+        return sigma.mean(0)
