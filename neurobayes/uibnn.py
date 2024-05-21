@@ -57,6 +57,6 @@ class UncertainInputBNN(BNN):
 
     def sample_single_posterior_predictive(self, rng_key, X_new, params, n_draws):
         sigma_x = params['sigma_x']
-        X_new_prime = dist.Normal(X_new, sigma_x)
+        X_new_prime = dist.Normal(X_new, sigma_x).sample(rng_key)
         return super().sample_single_posterior_predictive(rng_key, X_new_prime, params, n_draws)
 
