@@ -4,7 +4,6 @@ from .vidkl import VIDKL
 from .bnn import BNN
 from .hskbnn import HeteroskedasticBNN
 from .uibnn import UncertainInputBNN
-from .input_transform_bnn import InputTransformBNN
 from . import kernels
 from . import priors
 from . import utils
