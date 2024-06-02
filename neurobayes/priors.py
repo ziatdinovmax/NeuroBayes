@@ -27,18 +27,19 @@ def sample_biases(name: str, channels: int) -> jnp.ndarray:
     return b
 
 
-def get_mlp_prior(input_dim: int, output_dim: int, architecture: List[int]) -> Callable[[], Dict[str, jnp.ndarray]]:
+def get_mlp_prior(input_dim: int, output_dim: int, architecture: List[int], name: str = "main"
+                  ) -> Callable[[], Dict[str, jnp.ndarray]]:
     """Priors over weights and biases for a Bayesian MLP"""
     def mlp_prior():
         params = {}
         in_channels = input_dim
         for i, out_channels in enumerate(architecture):
-            params[f"w{i}"] = sample_weights(f"w{i}", in_channels, out_channels)
-            params[f"b{i}"] = sample_biases(f"b{i}", out_channels)
+            params[f"{name}_w{i}"] = sample_weights(f"{name}_w{i}", in_channels, out_channels)
+            params[f"{name}_b{i}"] = sample_biases(f"{name}_b{i}", out_channels)
             in_channels = out_channels
         # Output layer
-        params[f"w{len(architecture)}"] = sample_weights(f"w{len(architecture)}", in_channels, output_dim)
-        params[f"b{len(architecture)}"] = sample_biases(f"b{len(architecture)}", output_dim)
+        params[f"{name}_w{len(architecture)}"] = sample_weights(f"{name}_w{len(architecture)}", in_channels, output_dim)
+        params[f"{name}_b{len(architecture)}"] = sample_biases(f"{name}_b{len(architecture)}", output_dim)
         return params
     return mlp_prior
 

@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jnp
 
 
-def get_mlp(hidden_dim: List[int], activation: str = 'tanh'
+def get_mlp(hidden_dim: List[int], activation: str = 'tanh', name: str = "main"
             ) -> Callable[[jnp.ndarray, Dict[str, jnp.ndarray]], jnp.ndarray]:
     """Returns a function that represents an MLP for a given hidden_dim"""
     if activation not in ['relu', 'tanh']:
@@ -14,9 +14,9 @@ def get_mlp(hidden_dim: List[int], activation: str = 'tanh'
         """MLP for a single MCMC sample of weights and biases, handling arbitrary number of layers"""
         h = X
         for i in range(len(hidden_dim)):
-            h = activation_fn(jnp.matmul(h, params[f"w{i}"]) + params[f"b{i}"])
+            h = activation_fn(jnp.matmul(h, params[f"{name}_w{i}"]) + params[f"{name}_b{i}"])
         # No non-linearity after the last layer
-        z = jnp.matmul(h, params[f"w{len(hidden_dim)}"]) + params[f"b{len(hidden_dim)}"]
+        z = jnp.matmul(h, params[f"{name}_w{len(hidden_dim)}"]) + params[f"{name}_b{len(hidden_dim)}"]
         return z
     return mlp
 
