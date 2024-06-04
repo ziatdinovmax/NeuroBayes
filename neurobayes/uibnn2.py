@@ -24,7 +24,7 @@ class UncertainInputBNN2(BNN):
         if input_variance_model is None or input_variance_prior is None:
             hdim = [4, 2]
             self.input_variance_model = get_mlp(hdim, name="var")
-            self.input_variance_prior = get_mlp_prior(input_dim, input_dim, hdim, name="var")
+            self.input_variance_prior = get_mlp_prior(input_dim, input_dim, hdim, name="var", scale=0.1)
         else:
             self.input_variance_model = input_variance_model
             self.input_variance_prior = input_variance_prior
