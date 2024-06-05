@@ -6,9 +6,9 @@ import jax.numpy as jnp
 def get_mlp(hidden_dim: List[int], activation: str = 'tanh', name: str = "main"
             ) -> Callable[[jnp.ndarray, Dict[str, jnp.ndarray]], jnp.ndarray]:
     """Returns a function that represents an MLP for a given hidden_dim"""
-    if activation not in ['relu', 'tanh']:
-        raise NotImplementedError("Use either 'relu' or 'tanh' for activation")
-    activation_fn = jnp.tanh if activation == 'tanh' else jax.nn.relu
+    if activation not in ['silu', 'tanh']:
+        raise NotImplementedError("Use either 'silu' or 'tanh' for activation")
+    activation_fn = jnp.tanh if activation == 'tanh' else jax.nn.silu
 
     def mlp(X: jnp.ndarray, params: Dict[str, jnp.ndarray]) -> jnp.ndarray:
         """MLP for a single MCMC sample of weights and biases, handling arbitrary number of layers"""
@@ -24,9 +24,9 @@ def get_mlp(hidden_dim: List[int], activation: str = 'tanh', name: str = "main"
 def get_heteroskedastic_mlp(hidden_dim: List[int], activation: str = 'tanh'
                             ) -> Callable[[jnp.ndarray, Dict[str, jnp.ndarray]], Tuple[jnp.ndarray, jnp.ndarray]]:
     """Returns a function that represents an MLP for given hidden dimensions, outputting mean and variance"""
-    if activation not in ['relu', 'tanh']:
-        raise NotImplementedError("Use either 'relu' or 'tanh' for activation")
-    activation_fn = jnp.tanh if activation == 'tanh' else jax.nn.relu
+    if activation not in ['silu', 'tanh']:
+        raise NotImplementedError("Use either 'silu' or 'tanh' for activation")
+    activation_fn = jnp.tanh if activation == 'tanh' else jax.nn.silu
 
     def mlp(X: jnp.ndarray, params: Dict[str, jnp.ndarray]) -> Tuple[jnp.ndarray, jnp.ndarray]:
         h = X
