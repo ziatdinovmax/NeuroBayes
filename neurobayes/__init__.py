@@ -3,9 +3,8 @@ from .dkl import DKL
 from .vidkl import VIDKL
 from .bnn import BNN
 from .hskbnn import HeteroskedasticBNN
+from .hskbnn2 import HeteroskedasticBNN2
 from .uibnn import UncertainInputBNN
-from .uibnn2 import UncertainInputBNN2
-from .bnnlvm import BNNLVM
 from . import kernels
 from . import priors
 from . import utils
