@@ -46,3 +46,10 @@ class HeteroskedasticBNN(BNN):
         predictive = jax.vmap(lambda params: self.nn(X_new, params))
         sigma = predictive(samples)[-1]
         return sigma.mean(0)
+
+    def get_prediction_and_noise_stats(self, X_new: jnp.ndarray) -> jnp.ndarray:
+        X_new = self.set_data(X_new)
+        samples = self.get_samples(chain_dim=False)
+        predictive = jax.vmap(lambda params: self.nn(X_new, params))
+        mu, sig = predictive(samples)
+        return (mu.mean(0), mu.var(0)), (sig.mean(0), sig.var(0))
