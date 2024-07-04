@@ -5,6 +5,8 @@ import jax.numpy as jnp
 
 import numpy as np
 
+from .nn import FlaxMLP
+
 
 def infer_device(device_preference: str = None):
     """
@@ -118,3 +120,22 @@ def nlpd(y: jnp.ndarray, mu: jnp.ndarray, sigma_squared: jnp.ndarray,
 
     return nlpd
 
+
+def split_mlp(model, params):
+    """
+    Splits MLP and its weights into two sub-networks: one with last two layers
+    (last hidden layer + output layer) removed and another one consisting only of those two layers.
+    """
+    truncated_mlp = FlaxMLP(model.hidden_dims[:-1], output_dim=0)
+    last_layer_mlp = FlaxMLP(model.hidden_dims[-1:], output_dim=model.output_dim)
+
+    truncated_params = {}
+    last_layer_params = {}
+    for i, (key, val) in enumerate(params.items()):
+        if i < len(model.hidden_dims) - 1:
+            truncated_params[key] = val
+        else:
+            new_key = f"Dense{i - len(model.hidden_dims[:-1])}"
+            last_layer_params[new_key] = val
+
+    return truncated_mlp, truncated_params, last_layer_mlp, last_layer_params
