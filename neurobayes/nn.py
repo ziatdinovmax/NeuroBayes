@@ -61,6 +61,9 @@ class FlaxMLP(nn.Module):
             x = activation_fn(x)  # Apply activation function
 
         # Output layer, no activation function applied here
-        x = nn.Dense(features=self.output_dim, name=f"Dense{len(self.hidden_dims)}")(x) 
+        if self.output_dim:
+            x = nn.Dense(
+                features=self.output_dim,
+                name=f"Dense{len(self.hidden_dims)}")(x)
 
         return x
