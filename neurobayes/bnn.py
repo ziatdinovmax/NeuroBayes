@@ -1,8 +1,6 @@
 from typing import Dict, Tuple, Optional, Union, List
-import jax
 import jax.random as jra
 import jax.numpy as jnp
-from jax import vmap
 
 import numpyro
 import numpyro.distributions as dist
