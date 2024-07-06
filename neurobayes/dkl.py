@@ -1,16 +1,14 @@
-from typing import Dict, Tuple, Callable, Optional, List, Union
+from typing import Dict, Tuple, Callable, Optional, List
 from jax import vmap
 import jax.numpy as jnp
-import jax.random as jra
 import numpyro
 import numpyro.distributions as dist
-from numpyro.infer import MCMC, NUTS, init_to_median
 from numpyro.contrib.module import random_flax_module
 
 from .gp import GP
 from .nn import FlaxMLP
 from .priors import GPPriors
-from .utils import get_flax_compatible_dict, put_on_device
+from .utils import get_flax_compatible_dict
 
 
 kernel_fn_type = Callable[[jnp.ndarray, jnp.ndarray, Dict[str, jnp.ndarray], jnp.ndarray],  jnp.ndarray]
