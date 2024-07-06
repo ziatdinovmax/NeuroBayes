@@ -32,9 +32,6 @@ class PartialBNN(BNN):
 
         X = self.truncated_mlp.apply({'params': self.truncated_params}, X)
 
-        print(X.shape)
-        print(self.truncated_mlp.output_dim)
-
         bnn = random_flax_module(
             "nn", self.last_layer_mlp, input_shape=(1, self.truncated_mlp.hidden_dims[-1]),
             prior=(lambda name, shape: dist.Cauchy() if name == "bias" else dist.Normal()))
