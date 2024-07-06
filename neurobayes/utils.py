@@ -141,11 +141,13 @@ def split_mlp(model, params):
     return truncated_mlp, truncated_params, last_layer_mlp, last_layer_params
 
 
-def get_flax_dict(params_numpyro: Dict[str, jnp.ndarray]) -> Dict[str, Dict[str, jnp.ndarray]]:
+def get_flax_compatible_dict(params_numpyro: Dict[str, jnp.ndarray]) -> Dict[str, Dict[str, jnp.ndarray]]:
     """
-    Extracts NN weights and biases from DKL dictionary into a separate
-    dictionary compatible with flax .apply() method
+    Takes a dictionary with MCMC samples produced by numpyro
+    and creates a dictionary with weights and biases compatible
+    with flax .apply() method
     """
+    params_all = {}
     weights, biases = {}, {}
     for key, val in params_numpyro.items():
         if key.startswith('nn'):
@@ -154,7 +156,8 @@ def get_flax_dict(params_numpyro: Dict[str, jnp.ndarray]) -> Dict[str, Dict[str,
                 biases[layer] = val
             else:
                 weights[layer] = val
-    nn_params = {}
+        else:
+            params_all[key] = val
     for (k, v1), (_, v2) in zip(weights.items(), biases.items()):
-        nn_params[k] = {"kernel": v1, "bias": v2}
-    return nn_params
+        params_all[k] = {"kernel": v1, "bias": v2}
+    return params_all
