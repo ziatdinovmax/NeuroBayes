@@ -1,12 +1,16 @@
-from typing import Dict, Tuple, Callable, Optional, List
+from typing import Dict, Tuple, Callable, Optional, List, Union
 from jax import vmap
 import jax.numpy as jnp
+import jax.random as jra
 import numpyro
 import numpyro.distributions as dist
+from numpyro.infer import MCMC, NUTS, init_to_median
+from numpyro.contrib.module import random_flax_module
 
 from .gp import GP
-from .nn import get_mlp
-from .priors import GPPriors, get_mlp_prior
+from .nn import FlaxMLP
+from .priors import GPPriors
+from .utils import get_flax_compatible_dict, put_on_device
 
 
 kernel_fn_type = Callable[[jnp.ndarray, jnp.ndarray, Dict[str, jnp.ndarray], jnp.ndarray],  jnp.ndarray]
@@ -16,7 +20,6 @@ class DKL(GP):
     """
     Fully Bayesian Deep Kernel Learning
     """
-
     def __init__(self,
                  input_dim: int,
                  latent_dim: int,
@@ -28,9 +31,9 @@ class DKL(GP):
                  ) -> None:
         super(DKL, self).__init__(latent_dim, base_kernel, priors, jitter)
         hdim = hidden_dim if hidden_dim is not None else [32, 16, 8]
-        self.nn = get_mlp(hdim, activation)
-        self.nn_prior = get_mlp_prior(input_dim, latent_dim, hdim)
-
+        self.nn = FlaxMLP(hdim, latent_dim, activation)
+        self.input_dim = input_dim
+        
     def model(self,
               X: jnp.ndarray,
               y: jnp.ndarray = None,
@@ -38,8 +41,10 @@ class DKL(GP):
               ) -> None:
         """DKL probabilistic model"""
         # BNN part
-        nn_params = self.nn_prior()
-        z = self.nn(X, nn_params)
+        net = random_flax_module(
+            "nn", self.nn, input_shape=(1, self.input_dim),
+            prior=(lambda name, shape: dist.Cauchy() if name == "bias" else dist.Normal()))
+        z = net(X)
         # GP Part
         f_loc = jnp.zeros(X.shape[0])
         # Sample kernel parameters
@@ -55,6 +60,11 @@ class DKL(GP):
             obs=y,
         )
 
+    def get_samples(self, chain_dim: bool = False) -> Dict[str, jnp.ndarray]:
+        samples = self.mcmc.get_samples(group_by_chain=chain_dim)
+        # Get NN weights and biases
+        return get_flax_compatible_dict(samples)
+
     def compute_gp_posterior(self,
                              X_new: jnp.ndarray,
                              X_train: jnp.ndarray,
@@ -64,8 +74,8 @@ class DKL(GP):
                              ) -> Tuple[jnp.ndarray, jnp.ndarray]:
 
         # Transform X_new and X_train using the neural network to get embeddings
-        z_new = self.nn(X_new, params)
-        z_train = self.nn(X_train, params)
+        z_new = self.nn.apply({'params': params}, X_new)
+        z_train = self.nn.apply({'params': params}, X_train)
 
         # Proceed with the original GP computations using the embedded inputs
         return super().compute_gp_posterior(z_new, z_train, y_train, params, noiseless)
@@ -76,16 +86,13 @@ class DKL(GP):
         of the DKL's Bayesian neural network
         """
         X_new = self.set_data(X_new)
-        samples = self.get_samples(chain_dim=False)
-        predictive = vmap(lambda params: self.nn(X_new, params))
+        samples = self.get_samples()
+        predictive = vmap(lambda params: self.nn.apply({'params': params}, X_new))
         z = predictive(samples)
         return z
 
-    def print_summary(self, print_nn_weights: bool = False) -> None:
+    def print_summary(self) -> None:
         samples = self.get_samples(1)
-        if print_nn_weights:
-            numpyro.diagnostics.print_summary(samples)
-        else:
-            list_of_keys = ["k_scale", "k_length", "noise"]
+        list_of_keys = ["k_scale", "k_length", "noise"]
         numpyro.diagnostics.print_summary(
             {k: v for (k, v) in samples.items() if k in list_of_keys})
