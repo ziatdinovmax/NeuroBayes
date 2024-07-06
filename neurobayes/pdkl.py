@@ -29,7 +29,7 @@ class PartialDKL(DKL):
         super(PartialDKL, self).__init__(None, latent_dim, base_kernel, priors, jitter)
         (self.truncated_nn, self.truncated_params,
          self.nn) = split_mlp(
-             deterministic_nn, deterministic_weights)[:-1]
+             deterministic_nn, deterministic_weights, latent_dim)[:-1]
 
     def model(self, X: jnp.ndarray, y: jnp.ndarray = None, **kwargs) -> None:
         """BNN probabilistic model"""
