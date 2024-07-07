@@ -114,7 +114,7 @@ class BNN:
             X_new:
                 New input data for predictions.
             samples:
-                Dictionary of samples from the posterior
+                Dictionary of posterior samples with inferred model parameters (weights and biases)
             device:
                 The device (e.g. "cpu" or "gpu") perform computation on ('cpu', 'gpu'). If None, computation
                 is performed on the JAX default device.
@@ -133,7 +133,7 @@ class BNN:
         X_new, samples = put_on_device(device, X_new, samples)
 
         predictions = self.sample_from_posterior(
-            rng_key, X_new, return_sites=["mu", "y"])
+            rng_key, X_new, samples, return_sites=["mu", "y"])
         posterior_mean = predictions["mu"].mean(0)
         posterior_var = predictions["y"].var(0)
         return posterior_mean, posterior_var
@@ -141,11 +141,12 @@ class BNN:
     def sample_from_posterior(self,
                               rng_key: jnp.ndarray,
                               X_new: jnp.ndarray,
+                              samples: Dict[str, jnp.ndarray],
                               return_sites: Optional[List[str]] = None
                               ) -> jnp.ndarray:
-        
+   
         predictive = Predictive(
-            self.model, self.get_samples(),
+            self.model, samples,
             return_sites=return_sites
         )
         return predictive(rng_key, X_new)
