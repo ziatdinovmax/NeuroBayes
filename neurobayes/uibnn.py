@@ -1,8 +1,8 @@
 from typing import List, Optional
-import jax
 import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
+from numpyro.contrib.module import random_flax_module
 
 from .bnn import BNN
 
@@ -20,16 +20,17 @@ class UncertainInputBNN(BNN):
         super().__init__(input_dim, output_dim, hidden_dim, activation, noise_prior)
         self.input_noise_prior = input_noise_prior
 
-
     def model(self, X: jnp.ndarray, y: jnp.ndarray = None, **kwargs) -> None:
         """BNN probabilistic model"""
 
         # Sample input X
         X_prime = self._sample_input(X)
-        # Sample NN parameters
-        nn_params = self.nn_prior()
+        net = random_flax_module(
+            "nn", self.nn, input_shape=(1, self.input_dim),
+            prior=(lambda name, shape: dist.Cauchy() if name == "bias" else dist.Normal()))
+
         # Pass inputs through a NN with the sampled parameters
-        mu = self.nn(X_prime, nn_params)
+        mu = numpyro.deterministic("mu", net(X_prime))
         # Sample noise
         sig = self.sample_noise()
 
@@ -51,9 +52,3 @@ class UncertainInputBNN(BNN):
         # Sample input data using the sampled variances
         X_prime = numpyro.sample("X_prime", dist.Normal(X, sigma_x))
         return X_prime
-    
-    def sample_single_posterior_predictive(self, rng_key, X_new, params, n_draws):
-        sigma_x = params['sigma_x']
-        X_new_prime = dist.Normal(X_new, sigma_x).sample(rng_key)
-        return super().sample_single_posterior_predictive(rng_key, X_new_prime, params, n_draws)
-
