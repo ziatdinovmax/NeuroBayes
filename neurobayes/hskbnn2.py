@@ -1,13 +1,11 @@
-from typing import List, Callable, Optional
+from typing import List, Callable
 import jax.numpy as jnp
-import jax.random as jra
 import numpyro
 import numpyro.distributions as dist
 from numpyro.contrib.module import random_flax_module
 
 from .hskbnn import HeteroskedasticBNN
 from .nn import FlaxMLP
-from .utils import put_on_device
 
 
 class HeteroskedasticBNN2(HeteroskedasticBNN):
@@ -43,4 +41,3 @@ class HeteroskedasticBNN2(HeteroskedasticBNN):
 
         # Score against the observed data points
         numpyro.sample("y", dist.Normal(mu, sig), obs=y)
-
