@@ -1,0 +1,43 @@
+from typing import List, Dict
+import jax
+import jax.numpy as jnp
+import optax
+from .nn import FlaxMLP
+from tqdm import tqdm
+
+
+class DeterministicNN:
+
+    def __init__(self,
+                 input_dim: int,
+                 hidden_dims: List[int],
+                 output_dim: int,
+                 learning_rate: float = 0.01) -> None:
+        self.model = FlaxMLP(hidden_dims, output_dim)
+        self.params = self.model.init(
+            jax.random.PRNGKey(0), jnp.ones((1, input_dim)))['params']
+        self.optimizer = optax.adam(learning_rate=learning_rate)
+        self.opt_state = self.optimizer.init(self.params)
+
+    def mse_loss(self, params: Dict, inputs: jnp.ndarray,
+                 targets: jnp.ndarray) -> jnp.ndarray:
+        predictions = self.model.apply({'params': params}, inputs)
+        return jnp.mean((predictions - targets) ** 2)
+
+    def train_step(self, inputs: jnp.ndarray, targets: jnp.ndarray) -> jnp.ndarray:
+        # Calculate gradients
+        loss_value, grads = jax.value_and_grad(self.mse_loss)(self.params, inputs, targets)
+        # Update parameters and optimizer state
+        updates, self.opt_state = self.optimizer.update(grads, self.opt_state)
+        self.params = optax.apply_updates(self.params, updates)
+        return loss_value
+
+    def train(self, X_train: jnp.ndarray, y_train: jnp.ndarray, epochs: int) -> None:
+        with tqdm(total=epochs, desc="Training Progress", leave=True) as pbar:
+            for epoch in range(epochs):
+                loss = self.train_step(X_train, y_train)
+                pbar.update(1)
+                pbar.set_postfix_str(f"Epoch {epoch}, Loss: {loss:.4f}")
+
+    def predict(self, X: jnp.ndarray) -> jnp.ndarray:
+        return self.model.apply({'params': self.params}, X)
