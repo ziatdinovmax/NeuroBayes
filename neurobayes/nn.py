@@ -97,3 +97,36 @@ class FlaxMLP2Head(nn.Module):
         variance = nn.softplus(variance)  # ensure the output is positive
 
         return mean, variance
+
+
+class FlaxMultiTaskMLP(nn.Module):
+    hidden_dims: Sequence[int]  # List of hidden layer sizes
+    num_outputs: int            # Number of outputs per task
+    num_tasks: int              # Number of tasks (heads)
+    activation: str = 'tanh'    # Type of activation function, default is 'tanh'
+
+    @nn.compact
+    def __call__(self, x: jnp.ndarray) -> Sequence[jnp.ndarray]:
+        """
+        Forward pass of the MLP with multiple output heads, each for a separate regression task.
+        """
+        # Set the activation function based on the input parameter
+        activation_fn = nn.tanh if self.activation == 'tanh' else nn.silu
+
+        # Build the hidden layers
+        for i, hidden_dim in enumerate(self.hidden_dims):
+            x = nn.Dense(features=hidden_dim, name=f"Dense{i}")(x)
+            x = activation_fn(x)  # Apply activation function
+
+        # Task-specific branches/outputs
+        outputs = []
+        for i in range(self.num_tasks):
+            # Separate one-layer NN branch for each task
+            task_specific = nn.Dense(self.hidden_dims[-1])(x)
+            task_specific = activation_fn(task_specific)
+            # Final output head for each task
+            output = nn.Dense(1, name=f'output_task_{i}')(task_specific)
+            outputs.append(output)
+
+        return outputs
+
