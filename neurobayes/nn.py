@@ -134,4 +134,4 @@ class FlaxMultiTaskMLP(nn.Module):
             
             start_idx = end_idx
 
-        return all_outputs
+        return jnp.concatenate(all_outputs)
