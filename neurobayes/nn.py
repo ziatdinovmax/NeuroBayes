@@ -101,32 +101,37 @@ class FlaxMLP2Head(nn.Module):
 
 class FlaxMultiTaskMLP(nn.Module):
     hidden_dims: Sequence[int]  # List of hidden layer sizes
-    num_outputs: int            # Number of outputs per task
+    num_outputs: Sequence[int]  # Number of outputs per task
     num_tasks: int              # Number of tasks (heads)
+    task_structure: Sequence[int]   # List defining how many rows belong to each task
     activation: str = 'tanh'    # Type of activation function, default is 'tanh'
 
     @nn.compact
-    def __call__(self, x: jnp.ndarray) -> Sequence[jnp.ndarray]:
+    def __call__(self, x: jnp.ndarray) -> List[jnp.ndarray]:
         """
         Forward pass of the MLP with multiple output heads, each for a separate regression task.
+        x: input array of features
         """
         # Set the activation function based on the input parameter
         activation_fn = nn.tanh if self.activation == 'tanh' else nn.silu
 
-        # Build the hidden layers
+        # Build the shared hidden layers
         for i, hidden_dim in enumerate(self.hidden_dims):
-            x = nn.Dense(features=hidden_dim, name=f"Dense{i}")(x)
+            x = nn.Dense(features=hidden_dim, name=f"SharedDense{i}")(x)
             x = activation_fn(x)  # Apply activation function
 
-        # Task-specific branches/outputs
-        outputs = []
+        # Compute outputs for all tasks
+        all_outputs = []
+        start_idx = 0
         for i in range(self.num_tasks):
-            # Separate one-layer NN branch for each task
-            task_specific = nn.Dense(self.hidden_dims[-1])(x)
+            end_idx = start_idx + self.task_structure[i]
+            task_x = jax.lax.dynamic_slice(x, (start_idx, 0), (self.task_structure[i], x.shape[1]))
+            
+            task_specific = nn.Dense(self.hidden_dims[-1], name=f"TaskSpecific{i}")(task_x)
             task_specific = activation_fn(task_specific)
-            # Final output head for each task
-            output = nn.Dense(1, name=f'output_task_{i}')(task_specific)
-            outputs.append(output)
+            output = nn.Dense(self.num_outputs[i], name=f'output_task_{i}')(task_specific)
+            all_outputs.append(output)
+            
+            start_idx = end_idx
 
-        return outputs
-
+        return all_outputs
