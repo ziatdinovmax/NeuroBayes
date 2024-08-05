@@ -8,14 +8,15 @@ from numpyro.contrib.module import random_flax_module
 
 from .gp import GP
 from .priors import GPPriors
-from .utils import split_mlp
+from .utils import split_mlp, get_flax_compatible_dict
+
 
 kernel_fn_type = Callable[[jnp.ndarray, jnp.ndarray, Dict[str, jnp.ndarray], jnp.ndarray],  jnp.ndarray]
 
 
-class NNGP(GP):
+class DetDMFGP(GP):
     """
-    Partially stochastic NN as a mean function in GP
+    Pretrained NN as a deep mean function in GP
     """
 
     def __init__(self,
@@ -25,21 +26,22 @@ class NNGP(GP):
                  priors: Optional[GPPriors] = None,
                  jitter: float = 1e-6
                  ) -> None:
-        super(NNGP, self).__init__(input_dim, kernel, priors, jitter)
-        (self.truncated_nn, self.truncated_params,
-         self.nn) = split_mlp(
-             deterministic_nn, deterministic_weights)[:-1]
+        super(DetDMFGP, self).__init__(input_dim, kernel, priors, jitter)
+        # (self.truncated_nn, self.truncated_params,
+        #  self.nn) = split_mlp(
+        #      deterministic_nn, deterministic_weights)[:-1]
+        self.nn = deterministic_nn
+        self.nn_params = deterministic_weights
 
     def model(self, X: jnp.ndarray, y: jnp.ndarray = None, **kwargs) -> None:
         """GP model with partiallys stochastic NN as its mean function"""
         # Get inputs through a deterministic NN part
-        X_prime = self.truncated_nn.apply({'params': self.truncated_params}, X)
+        f_loc = self.nn.apply({'params': self.nn_params}, X)
         # Fully stochastic NN part
-        bnn = random_flax_module(
-            "nn", self.nn, input_shape=(1, self.truncated_nn.hidden_dims[-1]),
-            prior=(lambda name, shape: dist.Cauchy() if name == "bias" else dist.Normal()))
-        # Mean function embedding
-        f_loc = bnn(X_prime)
+        # bnn = random_flax_module(
+        #     "nn", self.nn, input_shape=(1, self.truncated_nn.hidden_dims[-1]),
+        #     prior=(lambda name, shape: dist.Cauchy() if name == "bias" else dist.Normal()))
+        # # Mean function embedding
         # Sample kernel parameters
         kernel_params = self.sample_kernel_params()
         # Sample observational noise variance
@@ -68,8 +70,8 @@ class NNGP(GP):
         y_residual = y_train.copy()
 
         # Compute mean function
-        x_prime = self.truncated_nn.apply({'params': self.truncated_params}, X_train)
-        f_loc1 = self.nn.apply({'params': params}, x_prime)
+        #x_prime = self.truncated_nn.apply({'params': self.truncated_params}, X_train)
+        f_loc1 = self.nn.apply({'params': self.nn_params}, X_train)
         y_residual -= f_loc1.squeeze()
 
         # compute kernel matrices for train and new/test data
@@ -81,8 +83,19 @@ class NNGP(GP):
         mean = jnp.matmul(k_pX, jnp.matmul(K_xx_inv, y_residual))
         cov = k_pp - jnp.matmul(k_pX, jnp.matmul(K_xx_inv, jnp.transpose(k_pX)))
 
-        x_prime2 = self.truncated_nn.apply({'params': self.truncated_params}, X_new)
-        f_loc2 = self.nn.apply({'params': params}, x_prime2)
+        #x_prime2 = self.truncated_nn.apply({'params': self.truncated_params}, X_new)
+        f_loc2 = self.nn.apply({'params': self.nn_params}, X_new)
         mean += f_loc2.squeeze()
 
         return mean, cov
+    
+    # def get_samples(self, chain_dim: bool = False) -> Dict[str, jnp.ndarray]:
+    #     samples = self.mcmc.get_samples(group_by_chain=chain_dim)
+    #     # Get NN weights and biases
+    #     return get_flax_compatible_dict(samples)
+
+    def print_summary(self) -> None:
+        samples = self.get_samples(1)
+        list_of_keys = ["k_scale", "k_length", "noise"]
+        numpyro.diagnostics.print_summary(
+            {k: v for (k, v) in samples.items() if k in list_of_keys})
