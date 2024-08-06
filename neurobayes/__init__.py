@@ -11,7 +11,6 @@ from .uibnn import UncertainInputBNN
 from .detnn import DeterministicNN
 from .mtbnn import MultitaskBNN
 from .det_dmfgp import DetDMFGP
-from .dmfgp import DMFGP
 from . import kernels
 from . import priors
 from . import utils
