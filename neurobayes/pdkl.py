@@ -89,14 +89,14 @@ class PartialDKL(DKL):
                 is performed on the JAX default device.
             rng_key: random number generator key
         """
-        X, y = self.set_data(X, y)
         if hasattr(self, "untrained_deterministic_nn"):
             print("Training deterministic NN...")
+            X = self.set_data(X)
             det_nn = DeterministicNN(self.untrained_deterministic_nn, self.input_dim)
             det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs)
             (self.truncated_nn, self.truncated_params,
             self.last_layer_nn) = split_mlp(
-                det_nn.model, det_nn.params)[:-1]
+                det_nn.model, det_nn.params, self.kernel_dim)[:-1]
             print("Training partially Bayesian DKL")
         super().fit(X, y, num_warmup, num_samples, num_chains, chain_method, progress_bar, device, rng_key)
 
