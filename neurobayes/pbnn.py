@@ -68,6 +68,9 @@ class PartialBNN(BNN):
             num_warmup: number of HMC warmup states
             num_samples: number of HMC samples
             num_chains: number of HMC chains
+            sgd_epochs:
+                number of SGD training epochs for deterministic NN
+                (if trained weights are not provided at the initialization stage)
             chain_method: 'sequential', 'parallel' or 'vectorized'
             progress_bar: show progress bar
             device:
