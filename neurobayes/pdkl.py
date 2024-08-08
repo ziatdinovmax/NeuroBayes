@@ -44,7 +44,7 @@ class PartialDKL(DKL):
         X = self.truncated_nn.apply({'params': self.truncated_params}, X)
         # Fully stochastic NN part
         bnn = random_flax_module(
-            "nn", self.nn, input_shape=(1, self.truncated_nn.hidden_dims[-1]),
+            "nn", self.last_layer_nn, input_shape=(1, self.truncated_nn.hidden_dims[-1]),
             prior=(lambda name, shape: dist.Cauchy() if name == "bias" else dist.Normal()))
         # Latent encoding
         z = bnn(X)
