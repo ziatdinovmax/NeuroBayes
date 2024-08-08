@@ -32,6 +32,7 @@ class DeterministicNN:
         return loss_value
 
     def train(self, X_train: jnp.ndarray, y_train: jnp.ndarray, epochs: int) -> None:
+        X_train, y_train = self.set_data(X_train, y_train)
         with tqdm(total=epochs, desc="Training Progress", leave=True) as pbar:
             for epoch in range(epochs):
                 loss = self.train_step(X_train, y_train)
@@ -39,4 +40,13 @@ class DeterministicNN:
                 pbar.set_postfix_str(f"Epoch {epoch+1}, Loss: {loss:.4f}")
 
     def predict(self, X: jnp.ndarray) -> jnp.ndarray:
+        X = self.set_data(X)
         return self.model.apply({'params': self.params}, X)
+    
+    def set_data(self, X: jnp.ndarray, y: jnp.ndarray)  -> jnp.ndarray:
+        X = X if X.ndim > 1 else X[:, None]
+        if y is not None:
+            y = y[:, None] if y.ndim < 2 else y
+            return X, y
+        return X
+

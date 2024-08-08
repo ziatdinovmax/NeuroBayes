@@ -78,7 +78,6 @@ class PartialBNN(BNN):
                 is performed on the JAX default device.
             rng_key: random number generator key
         """
-        X, y = self.set_data(X, y)
         if hasattr(self, "untrained_deterministic_nn"):
             print("Training deterministic NN...")
             det_nn = DeterministicNN(self.untrained_deterministic_nn, self.input_dim)
