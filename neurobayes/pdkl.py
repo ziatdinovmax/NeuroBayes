@@ -67,7 +67,8 @@ class PartialDKL(DKL):
             num_warmup: int = 2000, num_samples: int = 2000,
             num_chains: int = 1, chain_method: str = 'sequential',
             sgd_epochs: Optional[int] = None,
-            progress_bar: bool = True, device: str = None,
+            progress_bar: bool = True, print_summary: bool = True,
+            device: str = None,
             rng_key: Optional[jnp.array] = None,
             ) -> None:
         """
@@ -84,6 +85,7 @@ class PartialDKL(DKL):
                 (if trained weights are not provided at the initialization stage)
             chain_method: 'sequential', 'parallel' or 'vectorized'
             progress_bar: show progress bar
+            print_summary: Print MCMC summary
             device:
                 The device (e.g. "cpu" or "gpu") perform computation on ('cpu', 'gpu'). If None, computation
                 is performed on the JAX default device.
@@ -98,7 +100,7 @@ class PartialDKL(DKL):
             self.last_layer_nn) = split_mlp(
                 det_nn.model, det_nn.params, self.kernel_dim)[:-1]
             print("Training partially Bayesian DKL")
-        super().fit(X, y, num_warmup, num_samples, num_chains, chain_method, progress_bar, device, rng_key)
+        super().fit(X, y, num_warmup, num_samples, num_chains, chain_method, progress_bar, print_summary, device, rng_key)
 
     def compute_gp_posterior(self,
                              X_new: jnp.ndarray,
