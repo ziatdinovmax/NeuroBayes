@@ -30,8 +30,8 @@ class PartialDKL(DKL):
                  ) -> None:
         super(PartialDKL, self).__init__(input_dim, latent_dim, base_kernel, priors, jitter)
         if deterministic_weights:
-            (self.truncated_mlp, self.truncated_params,
-             self.last_layer_mlp) = split_mlp(
+            (self.truncated_nn, self.truncated_params,
+             self.last_layer_nn) = split_mlp(
                  deterministic_nn, deterministic_weights, latent_dim)[:-1]
         else:
             self.untrained_deterministic_nn = deterministic_nn
@@ -94,8 +94,8 @@ class PartialDKL(DKL):
             print("Training deterministic NN...")
             det_nn = DeterministicNN(self.untrained_deterministic_nn, self.input_dim)
             det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs)
-            (self.truncated_mlp, self.truncated_params,
-            self.last_layer_mlp) = split_mlp(
+            (self.truncated_nn, self.truncated_params,
+            self.last_layer_nn) = split_mlp(
                 det_nn.model, det_nn.params)[:-1]
             print("Training partially Bayesian DKL")
         super().fit(X, y, num_warmup, num_samples, num_chains, chain_method, progress_bar, device, rng_key)
