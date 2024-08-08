@@ -86,5 +86,6 @@ class PartialBNN(BNN):
             (self.truncated_mlp, self.truncated_params,
             self.last_layer_mlp) = split_mlp(
                 det_nn.model, det_nn.params)[:-1]
+            print("Training partially Bayesian NN")
         super().fit(X, y, num_warmup, num_samples, num_chains, chain_method, progress_bar, device, rng_key)
 
