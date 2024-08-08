@@ -31,7 +31,7 @@ class PartialDKL(DKL):
         super(PartialDKL, self).__init__(input_dim, latent_dim, base_kernel, priors, jitter)
         if deterministic_weights:
             (self.truncated_nn, self.truncated_params,
-             self.last_layer_nn) = split_mlp(
+             self.nn) = split_mlp(
                  deterministic_nn, deterministic_weights, latent_dim)[:-1]
         else:
             self.untrained_deterministic_nn = deterministic_nn
@@ -44,7 +44,7 @@ class PartialDKL(DKL):
         X = self.truncated_nn.apply({'params': self.truncated_params}, X)
         # Fully stochastic NN part
         bnn = random_flax_module(
-            "nn", self.last_layer_nn, input_shape=(1, self.truncated_nn.hidden_dims[-1]),
+            "nn", self.nn, input_shape=(1, self.truncated_nn.hidden_dims[-1]),
             prior=(lambda name, shape: dist.Cauchy() if name == "bias" else dist.Normal()))
         # Latent encoding
         z = bnn(X)
@@ -97,7 +97,7 @@ class PartialDKL(DKL):
             det_nn = DeterministicNN(self.untrained_deterministic_nn, self.input_dim)
             det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs)
             (self.truncated_nn, self.truncated_params,
-            self.last_layer_nn) = split_mlp(
+            self.nn) = split_mlp(
                 det_nn.model, det_nn.params, self.kernel_dim)[:-1]
             print("Training partially Bayesian DKL")
         super().fit(X, y, num_warmup, num_samples, num_chains, chain_method, progress_bar, print_summary, device, rng_key)
