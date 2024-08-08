@@ -17,7 +17,7 @@ class PartialBNN(BNN):
     """
     def __init__(self,
                  deterministic_nn: Type[flax.linen.Module],
-                 deterministic_weights: Dict[str, jnp.ndarray] = None,
+                 deterministic_weights: Optional[Dict[str, jnp.ndarray]] = None,
                  input_dim: int = None,
                  noise_prior: Optional[dist.Distribution] = None
                  ) -> None:
