@@ -8,25 +8,32 @@ from numpyro.contrib.module import random_flax_module
 
 from .bnn import BNN
 from .utils import split_mlp
+from .detnn import DeterministicNN
 
 
 class PartialBNN(BNN):
     """
     Partially stochastic NN
     """
-
     def __init__(self,
                  deterministic_nn: Type[flax.linen.Module],
-                 deterministic_weights: Dict[str, jnp.ndarray],
+                 deterministic_weights: Dict[str, jnp.ndarray] = None,
+                 input_dim: int = None,
                  noise_prior: Optional[dist.Distribution] = None
                  ) -> None:
-        (self.truncated_mlp, self.truncated_params,
-         self.last_layer_mlp) = split_mlp(
-             deterministic_nn, deterministic_weights)[:-1]
+        super().__init__(1, 1)
+        if deterministic_weights:
+            (self.truncated_mlp, self.truncated_params,
+             self.last_layer_mlp) = split_mlp(
+                 deterministic_nn, deterministic_weights)[:-1]
+        else:
+            self.untrained_deterministic_nn = deterministic_nn
+            if not input_dim:
+                raise ValueError("Please provide input data dimensions or pre-trained model parameters")  
         if noise_prior is None:
             noise_prior = dist.HalfNormal(1.0)
         self.noise_prior = noise_prior
-
+    
     def model(self, X: jnp.ndarray, y: jnp.ndarray = None, **kwargs) -> None:
         """BNN probabilistic model"""
 
@@ -44,3 +51,35 @@ class PartialBNN(BNN):
 
         # Score against the observed data points
         numpyro.sample("y", dist.Normal(mu, sig), obs=y)
+
+    def fit(self, X: jnp.ndarray, y: jnp.ndarray,
+            num_warmup: int = 2000, num_samples: int = 2000,
+            num_chains: int = 1, chain_method: str = 'sequential',
+            progress_bar: bool = True, device: str = None,
+            rng_key: Optional[jnp.array] = None,
+            ) -> None:
+        """
+        Run HMC to infer parameters of the BNN
+
+        Args:
+            X: 2D feature vector
+            y: 1D target vector
+            num_warmup: number of HMC warmup states
+            num_samples: number of HMC samples
+            num_chains: number of HMC chains
+            chain_method: 'sequential', 'parallel' or 'vectorized'
+            progress_bar: show progress bar
+            device:
+                The device (e.g. "cpu" or "gpu") perform computation on ('cpu', 'gpu'). If None, computation
+                is performed on the JAX default device.
+            rng_key: random number generator key
+        """
+        X, y = self.set_data(X, y)
+        if hasattr(self, "untrained_deterministic_nn"):
+            print("Training deterministic NN...")
+            det_nn = DeterministicNN(self.untrained_deterministic_nn, self.input_dim)
+            (self.truncated_mlp, self.truncated_params,
+            self.last_layer_mlp) = split_mlp(
+                det_nn.model, det_nn.params)[:-1]
+        super().fit(X, y, num_warmup, num_samples, num_chains, chain_method, progress_bar, device, rng_key)
+
