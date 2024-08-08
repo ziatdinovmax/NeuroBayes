@@ -28,7 +28,7 @@ class PartialDKL(DKL):
                  priors: Optional[GPPriors] = None,
                  jitter: float = 1e-6,
                  ) -> None:
-        super(PartialDKL, self).__init__(None, latent_dim, base_kernel, priors, jitter)
+        super(PartialDKL, self).__init__(input_dim, latent_dim, base_kernel, priors, jitter)
         if deterministic_weights:
             (self.truncated_mlp, self.truncated_params,
              self.last_layer_mlp) = split_mlp(
