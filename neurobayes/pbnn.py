@@ -55,6 +55,7 @@ class PartialBNN(BNN):
     def fit(self, X: jnp.ndarray, y: jnp.ndarray,
             num_warmup: int = 2000, num_samples: int = 2000,
             num_chains: int = 1, chain_method: str = 'sequential',
+            sgd_epochs: Optional[int] = None,
             progress_bar: bool = True, device: str = None,
             rng_key: Optional[jnp.array] = None,
             ) -> None:
@@ -78,6 +79,7 @@ class PartialBNN(BNN):
         if hasattr(self, "untrained_deterministic_nn"):
             print("Training deterministic NN...")
             det_nn = DeterministicNN(self.untrained_deterministic_nn, self.input_dim)
+            det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs)
             (self.truncated_mlp, self.truncated_params,
             self.last_layer_mlp) = split_mlp(
                 det_nn.model, det_nn.params)[:-1]
