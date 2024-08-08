@@ -1,19 +1,18 @@
-from typing import List, Dict
+from typing import Dict, Type
 import jax
 import jax.numpy as jnp
+import flax
 import optax
-from .nn import FlaxMLP
 from tqdm import tqdm
 
 
 class DeterministicNN:
 
     def __init__(self,
+                 architecture: Type[flax.linen.Module],
                  input_dim: int,
-                 hidden_dims: List[int],
-                 output_dim: int,
                  learning_rate: float = 0.01) -> None:
-        self.model = FlaxMLP(hidden_dims, output_dim)
+        self.model = architecture
         self.params = self.model.init(
             jax.random.PRNGKey(0), jnp.ones((1, input_dim)))['params']
         self.optimizer = optax.adam(learning_rate=learning_rate)
@@ -37,7 +36,7 @@ class DeterministicNN:
             for epoch in range(epochs):
                 loss = self.train_step(X_train, y_train)
                 pbar.update(1)
-                pbar.set_postfix_str(f"Epoch {epoch}, Loss: {loss:.4f}")
+                pbar.set_postfix_str(f"Epoch {epoch+1}, Loss: {loss:.4f}")
 
     def predict(self, X: jnp.ndarray) -> jnp.ndarray:
         return self.model.apply({'params': self.params}, X)
