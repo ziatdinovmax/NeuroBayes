@@ -23,8 +23,8 @@ class PartialBNN(BNN):
                  ) -> None:
         super().__init__(1, 1)
         if deterministic_weights:
-            (self.truncated_mlp, self.truncated_params,
-             self.last_layer_mlp) = split_mlp(
+            (self.truncated_nn, self.truncated_params,
+             self.last_layer_nn) = split_mlp(
                  deterministic_nn, deterministic_weights)[:-1]
         else:
             self.untrained_deterministic_nn = deterministic_nn
@@ -37,10 +37,10 @@ class PartialBNN(BNN):
     def model(self, X: jnp.ndarray, y: jnp.ndarray = None, **kwargs) -> None:
         """BNN probabilistic model"""
 
-        X = self.truncated_mlp.apply({'params': self.truncated_params}, X)
+        X = self.truncated_nn.apply({'params': self.truncated_params}, X)
 
         bnn = random_flax_module(
-            "nn", self.last_layer_mlp, input_shape=(1, self.truncated_mlp.hidden_dims[-1]),
+            "nn", self.last_layer_nn, input_shape=(1, self.truncated_nn.hidden_dims[-1]),
             prior=(lambda name, shape: dist.Cauchy() if name == "bias" else dist.Normal()))
 
         # Pass inputs through a NN with the sampled parameters
@@ -83,8 +83,8 @@ class PartialBNN(BNN):
             print("Training deterministic NN...")
             det_nn = DeterministicNN(self.untrained_deterministic_nn, self.input_dim)
             det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs)
-            (self.truncated_mlp, self.truncated_params,
-            self.last_layer_mlp) = split_mlp(
+            (self.truncated_nn, self.truncated_params,
+            self.last_layer_nn) = split_mlp(
                 det_nn.model, det_nn.params)[:-1]
             print("Training partially Bayesian NN")
         super().fit(X, y, num_warmup, num_samples, num_chains, chain_method, progress_bar, device, rng_key)
