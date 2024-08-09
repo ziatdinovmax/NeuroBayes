@@ -43,7 +43,7 @@ class DeterministicNN:
         X = self.set_data(X)
         return self.model.apply({'params': self.params}, X)
     
-    def set_data(self, X: jnp.ndarray, y: jnp.ndarray)  -> jnp.ndarray:
+    def set_data(self, X: jnp.ndarray, y: jnp.ndarray = None)  -> jnp.ndarray:
         X = X if X.ndim > 1 else X[:, None]
         if y is not None:
             y = y[:, None] if y.ndim < 2 else y
