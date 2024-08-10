@@ -1,44 +1,6 @@
-from typing import Callable, Dict, List, Tuple, Sequence, Optional
-import jax
+from typing import Sequence
 import jax.numpy as jnp
 import flax.linen as nn
-
-
-def get_mlp(hidden_dim: List[int], activation: str = 'tanh', name: str = "main"
-            ) -> Callable[[jnp.ndarray, Dict[str, jnp.ndarray]], jnp.ndarray]:
-    """Returns a function that represents an MLP for a given hidden_dim"""
-    if activation not in ['silu', 'tanh']:
-        raise NotImplementedError("Use either 'silu' or 'tanh' for activation")
-    activation_fn = jnp.tanh if activation == 'tanh' else jax.nn.silu
-
-    def mlp(X: jnp.ndarray, params: Dict[str, jnp.ndarray]) -> jnp.ndarray:
-        """MLP for a single MCMC sample of weights and biases, handling arbitrary number of layers"""
-        h = X
-        for i in range(len(hidden_dim)):
-            h = activation_fn(jnp.matmul(h, params[f"{name}_w{i}"]) + params[f"{name}_b{i}"])
-        # No non-linearity after the last layer
-        z = jnp.matmul(h, params[f"{name}_w{len(hidden_dim)}"]) + params[f"{name}_b{len(hidden_dim)}"]
-        return z
-    return mlp
-
-
-def get_heteroskedastic_mlp(hidden_dim: List[int], activation: str = 'tanh'
-                            ) -> Callable[[jnp.ndarray, Dict[str, jnp.ndarray]], Tuple[jnp.ndarray, jnp.ndarray]]:
-    """Returns a function that represents an MLP for given hidden dimensions, outputting mean and variance"""
-    if activation not in ['silu', 'tanh']:
-        raise NotImplementedError("Use either 'silu' or 'tanh' for activation")
-    activation_fn = jnp.tanh if activation == 'tanh' else jax.nn.silu
-
-    def mlp(X: jnp.ndarray, params: Dict[str, jnp.ndarray]) -> Tuple[jnp.ndarray, jnp.ndarray]:
-        h = X
-        for i in range(len(hidden_dim)):
-            h = activation_fn(jnp.matmul(h, params[f"w{i}"]) + params[f"b{i}"])
-        # Separate output layers for mean and variance
-        mean = jnp.matmul(h, params['w_mean']) + params['b_mean']
-        log_variance = jnp.matmul(h, params['w_variance']) + params['b_variance']
-        variance = jnp.exp(log_variance)  # ensure variance is positive
-        return mean, variance
-    return mlp
 
 
 class FlaxMLP(nn.Module):
@@ -99,19 +61,19 @@ class FlaxMLP2Head(nn.Module):
         return mean, variance
 
 
-class FlaxMultiFidelityMLP(nn.Module):
+class FlaxMultiTaskMLP(nn.Module):
     input_dim: int
     backbone_dims: Sequence[int]
     output_sizes: Sequence[int]
-    num_fidelity_levels: int
+    num_tasks: int
     activation: str = 'tanh'
 
     def setup(self):
         activation_fn = nn.tanh if self.activation == 'tanh' else nn.silu
 
-        # Embedding layer for fidelity level
-        self.fidelity_embedding = nn.Embed(
-            num_embeddings=self.num_fidelity_levels,
+        # Embedding layer for task level
+        self.task_embedding = nn.Embed(
+            num_embeddings=self.num_tasks,
             features=self.backbone_dims[0]
         )
 
@@ -127,14 +89,14 @@ class FlaxMultiFidelityMLP(nn.Module):
                       for i, output_size in enumerate(self.output_sizes)]
 
     def __call__(self, x):
-        # Split input features and fidelity level
-        features, fidelity = x[:, :-1], x[:, -1].astype(jnp.int32)
+        # Split input features and task level
+        features, task = x[:, :-1], x[:, -1].astype(jnp.int32)
 
-        # Get fidelity embedding
-        fidelity_emb = self.fidelity_embedding(fidelity)
+        # Get task embedding
+        task_emb = self.task_embedding(task)
 
-        # Concatenate features with fidelity embedding
-        x = jnp.concatenate([features, fidelity_emb], axis=-1)
+        # Concatenate features with task embedding
+        x = jnp.concatenate([features, task_emb], axis=-1)
 
         # Pass through backbone
         x = self.backbone(x)
