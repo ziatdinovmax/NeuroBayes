@@ -62,7 +62,6 @@ class FlaxMLP2Head(nn.Module):
 
 
 class FlaxMultiTaskMLP(nn.Module):
-    input_dim: int
     backbone_dims: Sequence[int]
     output_sizes: Sequence[int]
     num_tasks: int
