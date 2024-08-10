@@ -17,7 +17,6 @@ class MultitaskBNN:
                  input_dim: int,
                  output_dims: Sequence[int],
                  num_tasks: int,
-                 task_structure: Sequence[int],
                  hidden_dim: List[int] = None,
                  activation: str = 'tanh',
                  noise_prior: Optional[dist.Distribution] = None
@@ -26,7 +25,7 @@ class MultitaskBNN:
             noise_prior = dist.HalfNormal(1.0)  # Chnage it to different noise levels for different tasks
         hdim = hidden_dim if hidden_dim is not None else [32, 16, 8]
         self.nn = FlaxMultiTaskMLP(
-            hdim, output_dims, num_tasks, task_structure, activation)
+            hdim, output_dims, num_tasks, activation)
         self.input_dim = input_dim
         self.noise_prior = noise_prior
 
@@ -44,7 +43,7 @@ class MultitaskBNN:
         sig = self.sample_noise()
 
         # Score against the observed data points
-        numpyro.sample("y", dist.Normal(mu, sig), obs=y)
+        numpyro.sample("y", dist.Normal(mu, sig), obs=y)  # the leading dim of y is task dim
 
 
     def fit(self, X: jnp.ndarray, y: jnp.ndarray,
