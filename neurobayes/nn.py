@@ -122,14 +122,9 @@ class FlaxMultiFidelityMLP(nn.Module):
             layers.append(activation_fn)
         self.backbone = nn.Sequential(layers)
 
-        # Heads
-        self.heads = [
-            nn.Sequential([
-                nn.Dense(self.backbone_dims[-1], name=f'head_{i}_dense_1'),
-                activation_fn,
-                nn.Dense(output_size, name=f'head_{i}_dense_2')
-            ]) for i, output_size in enumerate(self.output_sizes)
-        ]
+        # Heads fore different tasks
+        self.heads = [nn.Dense(output_size, name=f'head_{i}') 
+                      for i, output_size in enumerate(self.output_sizes)]
 
     def __call__(self, x):
         # Split input features and fidelity level
