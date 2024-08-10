@@ -1,4 +1,4 @@
-from typing import Callable, Dict, List, Tuple, Sequence
+from typing import Callable, Dict, List, Tuple, Sequence, Optional
 import jax
 import jax.numpy as jnp
 import flax.linen as nn
@@ -99,39 +99,50 @@ class FlaxMLP2Head(nn.Module):
         return mean, variance
 
 
-class FlaxMultiTaskMLP(nn.Module):
-    hidden_dims: Sequence[int]  # List of hidden layer sizes
-    num_outputs: Sequence[int]  # Number of outputs per task
-    num_tasks: int              # Number of tasks (heads)
-    task_structure: Sequence[int]   # List defining how many rows belong to each task
-    activation: str = 'tanh'    # Type of activation function, default is 'tanh'
+class FlaxMultiFidelityMLP(nn.Module):
+    input_dim: int
+    backbone_dims: Sequence[int]
+    output_sizes: Sequence[int]
+    num_fidelity_levels: int
+    activation: str = 'tanh'
 
-    @nn.compact
-    def __call__(self, x: jnp.ndarray) -> List[jnp.ndarray]:
-        """
-        Forward pass of the MLP with multiple output heads, each for a separate regression task.
-        x: input array of features
-        """
-        # Set the activation function based on the input parameter
+    def setup(self):
         activation_fn = nn.tanh if self.activation == 'tanh' else nn.silu
 
-        # Build the shared hidden layers
-        for i, hidden_dim in enumerate(self.hidden_dims):
-            x = nn.Dense(features=hidden_dim, name=f"SharedDense{i}")(x)
-            x = activation_fn(x)  # Apply activation function
+        # Embedding layer for fidelity level
+        self.fidelity_embedding = nn.Embed(
+            num_embeddings=self.num_fidelity_levels,
+            features=self.backbone_dims[0]
+        )
 
-        # Compute outputs for all tasks
-        all_outputs = []
-        start_idx = 0
-        for i in range(self.num_tasks):
-            end_idx = start_idx + self.task_structure[i]
-            task_x = jax.lax.dynamic_slice(x, (start_idx, 0), (self.task_structure[i], x.shape[1]))
-            
-            task_specific = nn.Dense(self.hidden_dims[-1], name=f"TaskSpecific{i}")(task_x)
-            task_specific = activation_fn(task_specific)
-            output = nn.Dense(self.num_outputs[i], name=f'output_task_{i}')(task_specific)
-            all_outputs.append(output)
-            
-            start_idx = end_idx
+        # Backbone
+        layers = []
+        for i, dim in enumerate(self.backbone_dims):
+            layers.append(nn.Dense(dim, name=f'backbone_dense_{i}'))
+            layers.append(activation_fn)
+        self.backbone = nn.Sequential(layers)
 
-        return jnp.concatenate(all_outputs)
+        # Heads
+        self.heads = [
+            nn.Sequential([
+                nn.Dense(self.backbone_dims[-1], name=f'head_{i}_dense_1'),
+                activation_fn,
+                nn.Dense(output_size, name=f'head_{i}_dense_2')
+            ]) for i, output_size in enumerate(self.output_sizes)
+        ]
+
+    def __call__(self, x):
+        # Split input features and fidelity level
+        features, fidelity = x[:, :-1], x[:, -1].astype(jnp.int32)
+
+        # Get fidelity embedding
+        fidelity_emb = self.fidelity_embedding(fidelity)
+
+        # Concatenate features with fidelity embedding
+        x = jnp.concatenate([features, fidelity_emb], axis=-1)
+
+        # Pass through backbone
+        x = self.backbone(x)
+
+        # Apply heads
+        return [head(x) for head in self.heads]
