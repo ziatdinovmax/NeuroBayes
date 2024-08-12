@@ -101,4 +101,4 @@ class FlaxMultiTaskMLP(nn.Module):
         x = self.backbone(x)
 
         # Apply heads
-        return jnp.stack([head(x) for head in self.heads])
+        return jnp.hstack([head(x) for head in self.heads])
