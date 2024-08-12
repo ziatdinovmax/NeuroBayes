@@ -33,7 +33,7 @@ class MultitaskBNN:
         """Multi-task BNN model"""
 
         net = random_flax_module(
-            "nn", self.nn, input_shape=(len(X), self.input_dim),
+            "nn", self.nn, input_shape=(len(X), self.input_dim+1),
             prior=(lambda name, shape: dist.Cauchy() if name == "bias" else dist.Normal()))
 
         # Pass inputs through a NN with the sampled parameters
