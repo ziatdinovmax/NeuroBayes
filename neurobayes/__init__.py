@@ -7,6 +7,7 @@ from .pbnn import PartialBNN
 from .pdkl import PartialDKL
 from .hskbnn import HeteroskedasticBNN
 from .hskbnn2 import HeteroskedasticBNN2
+from .phskbnn import HeteroskedasticPartialBNN
 from .uibnn import UncertainInputBNN
 from .detnn import DeterministicNN
 from .mtbnn import MultitaskBNN
