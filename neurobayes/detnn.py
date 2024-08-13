@@ -11,21 +11,29 @@ class DeterministicNN:
     def __init__(self,
                  architecture: Type[flax.linen.Module],
                  input_dim: int,
+                 loss: str = 'homoskedastic',
                  learning_rate: float = 0.01) -> None:
         self.model = architecture
         self.params = self.model.init(
             jax.random.PRNGKey(0), jnp.ones((1, input_dim)))['params']
         self.optimizer = optax.adam(learning_rate=learning_rate)
         self.opt_state = self.optimizer.init(self.params)
+        self.loss = loss
 
     def mse_loss(self, params: Dict, inputs: jnp.ndarray,
                  targets: jnp.ndarray) -> jnp.ndarray:
         predictions = self.model.apply({'params': params}, inputs)
         return jnp.mean((predictions - targets) ** 2)
+    
+    def heteroskedastic_loss(self, params: Dict, inputs: jnp.ndarray,
+                             targets: jnp.ndarray) -> jnp.ndarray:
+        y_pred, y_var = self.model.apply({'params': params}, inputs)
+        return jnp.mean(0.5 * jnp.log(y_var) + 0.5 * (targets - y_pred)**2 / y_var)
 
     def train_step(self, inputs: jnp.ndarray, targets: jnp.ndarray) -> jnp.ndarray:
         # Calculate gradients
-        loss_value, grads = jax.value_and_grad(self.mse_loss)(self.params, inputs, targets)
+        loss = self.mse_loss if self.loss == 'homoskedastic' else self.heteroskedastic_loss
+        loss_value, grads = jax.value_and_grad(loss)(self.params, inputs, targets)
         # Update parameters and optimizer state
         updates, self.opt_state = self.optimizer.update(grads, self.opt_state)
         self.params = optax.apply_updates(self.params, updates)
