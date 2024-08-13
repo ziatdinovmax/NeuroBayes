@@ -51,15 +51,18 @@ class FlaxMLP2Head(nn.Module):
             x = nn.Dense(features=hidden_dim, name=f"Dense{i}")(x)
             x = activation_fn(x)  # Apply activation function
 
-        # Two separate output layers, one for mean and one for variance
-        # Mean head
-        mean = nn.Dense(features=self.output_dim, name="MeanHead")(x)
-        
-        # Variance head
-        variance = nn.Dense(features=self.output_dim, name="VarianceHead")(x)
-        variance = nn.softplus(variance)  # ensure the output is positive
+        if self.output_dim:
+            # Two separate output layers, one for mean and one for variance
+            # Mean head
+            mean = nn.Dense(features=self.output_dim, name="MeanHead")(x)
+            
+            # Variance head
+            variance = nn.Dense(features=self.output_dim, name="VarianceHead")(x)
+            variance = nn.softplus(variance)  # ensure the output is positive
 
-        return mean, variance
+            return mean, variance
+        else:
+            return x
 
     
 class Embedding(nn.Module):
@@ -98,9 +101,11 @@ class FlaxMultiTaskMLP(nn.Module):
         # Heads fore different tasks
         self.heads = [
             nn.Sequential([
-                nn.Dense(self.backbone_dims[-1]*2, name=f'head_{i}_dense_1'),
+                nn.Dense(self.backbone_dims[-1], name=f'head_{i}_dense_1'),
                 activation_fn,
-                nn.Dense(output_size, name=f'head_{i}_dense_2')
+                nn.Dense(self.backbone_dims[-1], name=f'head_{i}_dense_2'),
+                activation_fn,
+                nn.Dense(output_size, name=f'head_{i}_dense_3')
             ]) for i, output_size in enumerate(self.output_sizes)
         ]
 
