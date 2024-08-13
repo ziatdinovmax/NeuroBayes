@@ -104,8 +104,7 @@ class FlaxMultiTaskMLP(nn.Module):
 
     def __call__(self, x):
         # Split input features and task level
-        int_dtype = to_int_dtype(x)
-        features, task = x[:, :-1], x[:, -1].astype(int_dtype)
+        features, task = x[:, :-1], x[:, -1].astype(jnp.int32)
 
         # Pass through backbone
         features = self.backbone(features)
@@ -118,15 +117,3 @@ class FlaxMultiTaskMLP(nn.Module):
 
         # Apply heads
         return jnp.hstack([head(x) for head in self.heads])
-
-
-def to_int_dtype(arr):
-    dtype_map = {
-        jnp.float32: jnp.int32,
-        jnp.float64: jnp.int64
-    }
-    target_dtype = dtype_map.get(arr.dtype)
-    if target_dtype is None:
-        raise ValueError(
-            "Unsupported data type. Please input an array with float32 or float64 dtype.")
-    return target_dtype
