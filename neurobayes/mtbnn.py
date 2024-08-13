@@ -19,13 +19,14 @@ class MultitaskBNN:
                  num_tasks: int,
                  hidden_dim: List[int] = None,
                  activation: str = 'tanh',
+                 embedding_dim: int = None,
                  noise_prior: Optional[dist.Distribution] = None
                  ) -> None:
         if noise_prior is None:
             noise_prior = dist.HalfNormal(1.0)  # Chnage it to different noise levels for different tasks
         hdim = hidden_dim if hidden_dim is not None else [32, 16, 8]
         self.nn = FlaxMultiTaskMLP(
-            hdim, output_dims, num_tasks, activation)
+            hdim, output_dims, num_tasks, activation, embedding_dim)
         self.input_dim = input_dim
         self.noise_prior = noise_prior
 
@@ -33,7 +34,7 @@ class MultitaskBNN:
         """Multi-task BNN model"""
 
         net = random_flax_module(
-            "nn", self.nn, input_shape=(len(X), self.input_dim+1),
+            "nn", self.nn, input_shape=(len(X), self.input_dim + 1),
             prior=(lambda name, shape: dist.Cauchy() if name == "bias" else dist.Normal()))
 
         # Pass inputs through a NN with the sampled parameters

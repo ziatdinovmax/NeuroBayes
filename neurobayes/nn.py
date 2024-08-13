@@ -1,4 +1,5 @@
 from typing import Sequence
+import jax
 import jax.numpy as jnp
 import flax.linen as nn
 
@@ -60,20 +61,29 @@ class FlaxMLP2Head(nn.Module):
 
         return mean, variance
 
+    
+class Embedding(nn.Module):
+    embedding_dim: int
+
+    @nn.compact
+    def __call__(self, x):
+        x_one_hot = jax.nn.one_hot(x, num_classes=x.max() + 1)
+        return nn.Dense(self.embedding_dim)(x_one_hot)
+
 
 class FlaxMultiTaskMLP(nn.Module):
     backbone_dims: Sequence[int]
     output_sizes: Sequence[int]
     num_tasks: int
     activation: str = 'tanh'
+    embedding_dim: int = None
 
     def setup(self):
         activation_fn = nn.tanh if self.activation == 'tanh' else nn.silu
 
-        # Embedding layer for task level
-        self.task_embedding = nn.Embed(
-            num_embeddings=self.num_tasks,
-            features=self.backbone_dims[0]
+        # Embedding layer for tasks
+        self.task_embedding = Embedding(
+            self.backbone_dims[-1] if not self.embedding_dim else self.embedding_dim
         )
 
         # Backbone
@@ -84,12 +94,21 @@ class FlaxMultiTaskMLP(nn.Module):
         self.backbone = nn.Sequential(layers)
 
         # Heads fore different tasks
-        self.heads = [nn.Dense(output_size, name=f'head_{i}') 
-                      for i, output_size in enumerate(self.output_sizes)]
+        self.heads = [
+            nn.Sequential([
+                nn.Dense(self.backbone_dims[-1], name=f'head_{i}_dense_1'),
+                activation_fn,
+                nn.Dense(output_size, name=f'head_{i}_dense_2')
+            ]) for i, output_size in enumerate(self.output_sizes)
+        ]
 
     def __call__(self, x):
         # Split input features and task level
-        features, task = x[:, :-1], x[:, -1].astype(jnp.int32)
+        int_dtype = to_int_dtype(x)
+        features, task = x[:, :-1], x[:, -1].astype(int_dtype)
+
+        # Pass through backbone
+        features = self.backbone(features)
 
         # Get task embedding
         task_emb = self.task_embedding(task)
@@ -97,8 +116,17 @@ class FlaxMultiTaskMLP(nn.Module):
         # Concatenate features with task embedding
         x = jnp.concatenate([features, task_emb], axis=-1)
 
-        # Pass through backbone
-        x = self.backbone(x)
-
         # Apply heads
         return jnp.hstack([head(x) for head in self.heads])
+
+
+def to_int_dtype(arr):
+    dtype_map = {
+        jnp.float32: jnp.int32,
+        jnp.float64: jnp.int64
+    }
+    target_dtype = dtype_map.get(arr.dtype)
+    if target_dtype is None:
+        raise ValueError(
+            "Unsupported data type. Please input an array with float32 or float64 dtype.")
+    return target_dtype
