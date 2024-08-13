@@ -64,10 +64,11 @@ class FlaxMLP2Head(nn.Module):
     
 class Embedding(nn.Module):
     embedding_dim: int
+    num_tasks: int
 
     @nn.compact
     def __call__(self, x):
-        x_one_hot = jax.nn.one_hot(x, num_classes=x.max() + 1)
+        x_one_hot = jax.nn.one_hot(x, num_classes=self.num_tasks)
         return nn.Dense(self.embedding_dim)(x_one_hot)
 
 
@@ -83,7 +84,8 @@ class FlaxMultiTaskMLP(nn.Module):
 
         # Embedding layer for tasks
         self.task_embedding = Embedding(
-            self.backbone_dims[-1] if not self.embedding_dim else self.embedding_dim
+            self.backbone_dims[-1] if not self.embedding_dim else self.embedding_dim,
+            self.num_tasks
         )
 
         # Backbone
