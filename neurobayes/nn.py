@@ -56,7 +56,7 @@ class Embedding(nn.Module):
 
 class FlaxMultiTaskMLP(nn.Module):
     backbone_dims: Sequence[int]
-    output_sizes: Sequence[int]
+    output_size: int
     num_tasks: int
     activation: str = 'tanh'
     embedding_dim: int = None
@@ -66,7 +66,7 @@ class FlaxMultiTaskMLP(nn.Module):
 
         # Embedding layer for tasks
         self.task_embedding = Embedding(
-            self.backbone_dims[-1]*2 if not self.embedding_dim else self.embedding_dim,
+            self.num_tasks if not self.embedding_dim else self.embedding_dim,
             self.num_tasks
         )
 
@@ -76,17 +76,14 @@ class FlaxMultiTaskMLP(nn.Module):
             layers.append(nn.Dense(dim, name=f'backbone_dense_{i}'))
             layers.append(activation_fn)
         self.backbone = nn.Sequential(layers)
-
-        # Heads fore different tasks
-        self.heads = [
-            nn.Sequential([
+        # self.output = nn.Dense(self.output_size)
+        self.head = nn.Sequential([
                 nn.Dense(self.backbone_dims[-1], name=f'head_{i}_dense_1'),
                 activation_fn,
                 nn.Dense(self.backbone_dims[-1], name=f'head_{i}_dense_2'),
                 activation_fn,
-                nn.Dense(output_size, name=f'head_{i}_dense_3')
-            ]) for i, output_size in enumerate(self.output_sizes)
-        ]
+                nn.Dense(self.output_size, name=f'head_{i}_dense_3')
+            ])
 
     def __call__(self, x):
         # Split input features and task level
@@ -101,5 +98,49 @@ class FlaxMultiTaskMLP(nn.Module):
         # Concatenate features with task embedding
         x = jnp.concatenate([features, task_emb], axis=-1)
 
-        # Apply heads
-        return jnp.hstack([head(x) for head in self.heads])
+        # Apply output layer
+        return self.head(x)
+    
+
+class FlaxMultiTaskMLP2(nn.Module):
+    backbone_dims: Sequence[int]
+    output_sizes: Sequence[int]
+    task_sizes: Sequence[int]
+    activation: str = 'tanh'
+
+    def setup(self):
+        self.num_tasks = len(self.task_sizes)
+        activation_fn = nn.tanh if self.activation == 'tanh' else nn.silu
+
+        # Backbone
+        layers = []
+        for i, dim in enumerate(self.backbone_dims):
+            layers.append(nn.Dense(dim, name=f'backbone_dense_{i}'))
+            layers.append(activation_fn)
+        self.backbone = nn.Sequential(layers)
+
+        # Heads for different tasks
+        self.heads = [
+            nn.Sequential([
+                nn.Dense(self.backbone_dims[-1], name=f'head_{i}_dense_1'),
+                activation_fn,
+                nn.Dense(self.backbone_dims[-1], name=f'head_{i}_dense_2'),
+                activation_fn,
+                nn.Dense(output_size, name=f'head_{i}_dense_3')
+            ]) for i, output_size in enumerate(self.output_sizes)
+        ]
+
+    def __call__(self, x):
+        # Pass through backbone
+        features = self.backbone(x)
+
+        # Apply heads based on task assignments
+        outputs = []
+        start = 0
+        for i, size in enumerate(self.task_sizes):
+            end = start + size
+            task_output = self.heads[i](features[start:end])
+            outputs.append(task_output)
+            start = end
+
+        return jnp.concatenate(outputs)

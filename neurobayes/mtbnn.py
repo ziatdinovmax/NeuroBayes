@@ -15,7 +15,7 @@ class MultitaskBNN:
 
     def __init__(self,
                  input_dim: int,
-                 output_dims: Sequence[int],
+                 output_dim: int,
                  num_tasks: int,
                  hidden_dim: List[int] = None,
                  activation: str = 'tanh',
@@ -23,15 +23,17 @@ class MultitaskBNN:
                  noise_prior: Optional[dist.Distribution] = None
                  ) -> None:
         if noise_prior is None:
-            noise_prior = dist.HalfNormal(1.0)  # Chnage it to different noise levels for different tasks
+            noise_prior = dist.HalfNormal(jnp.ones(num_tasks))
         hdim = hidden_dim if hidden_dim is not None else [32, 16, 8]
         self.nn = FlaxMultiTaskMLP(
-            hdim, output_dims, num_tasks, activation, embedding_dim)
+            hdim, output_dim, num_tasks, activation, embedding_dim)
         self.input_dim = input_dim
         self.noise_prior = noise_prior
 
     def model(self, X: jnp.ndarray, y: jnp.ndarray = None, **kwargs) -> None:
         """Multi-task BNN model"""
+
+        tasks = X[:, -1].astype(jnp.int32)
 
         net = random_flax_module(
             "nn", self.nn, input_shape=(len(X), self.input_dim + 1),
@@ -42,10 +44,10 @@ class MultitaskBNN:
 
         # Sample noise
         sig = self.sample_noise()
+        sigma_task = sig[tasks]
 
         # Score against the observed data points
-        numpyro.sample("y", dist.Normal(mu, sig), obs=y)  # the leading dim of y is task dim
-
+        numpyro.sample("y", dist.Normal(mu, sigma_task[:, None]), obs=y)
 
     def fit(self, X: jnp.ndarray, y: jnp.ndarray,
             num_warmup: int = 2000, num_samples: int = 2000,
@@ -93,7 +95,7 @@ class MultitaskBNN:
         """
         Sample observational noise variance
         """
-        return numpyro.sample("sig", self.noise_prior)
+        return numpyro.sample("sig", self.noise_prior.to_event(1))
 
     def predict(self,
                 X_new: jnp.ndarray,
