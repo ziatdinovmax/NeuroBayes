@@ -15,7 +15,9 @@ class MultitaskBNN2:
 
     def __init__(self,
                  input_dim: int,
-                 output_dim: int,
+                 output_dims: Sequence[int],
+                 num_tasks: int,
+                 embedding_dim: int = None,
                  hidden_dim: List[int] = None,
                  activation: str = 'tanh',
                  noise_prior: Optional[dist.Distribution] = None
@@ -25,14 +27,16 @@ class MultitaskBNN2:
         self.hdim = hidden_dim if hidden_dim is not None else [32, 16, 8]
         self.nn = None
         self.input_dim = input_dim
-        self.output_dim = output_dim
+        self.output_dims = output_dims
+        self.activation = activation
+        self.embedding_dim = embedding_dim
         self.noise_prior = noise_prior
 
     def model(self, X: jnp.ndarray, y: jnp.ndarray = None, **kwargs) -> None:
         """Multi-task BNN model"""
 
         tasks = X[:, -1].astype(jnp.int32)
-        X = X[:, :-1]
+        #X = X[:, :-1]
 
         net = random_flax_module(
             "nn", self.nn, input_shape=(len(X), self.input_dim),
@@ -71,7 +75,7 @@ class MultitaskBNN2:
             rng_key: random number generator key
         """
         task_structure = compute_task_sizes(X[:, -1])
-        self.nn = FlaxMultiTaskMLP2(self.hdim, self.output_dim, task_structure)
+        self.nn = FlaxMultiTaskMLP2(self.hdim, self.output_dims, task_structure, self.activation, self.embedding_dim)
 
         key = rng_key if rng_key is not None else jra.PRNGKey(0)
         X, y = self.set_data(X, y)
@@ -124,6 +128,9 @@ class MultitaskBNN2:
         """
         X_new = self.set_data(X_new)
 
+        task_structure = compute_task_sizes(X_new[:, -1])
+        self.nn.task_sizes = task_structure
+
         if rng_key is None:
             rng_key = jra.PRNGKey(0)
         if samples is None:
@@ -158,25 +165,18 @@ class MultitaskBNN2:
         return X
 
 
-def compute_task_sizes(indices: jnp.ndarray) -> List[int]:
+def compute_task_sizes(indices: jnp.ndarray) -> Dict[str, int]:
     """
-    Compute task sizes from an array of indices.
+    Compute task sizes from an array of indices, using string keys.
     
     Args:
-    indices (jnp.ndarray): 1D array of task indices, e.g., [0, 0, 0, 1, 1, 2, 2, 2, 2, 2, 2, 3, 3]
+    indices (jnp.ndarray): 1D array of task indices, e.g., [0, 0, 0, 1, 1, 3, 3, 3, 3, 3, 3, 5, 5]
     
     Returns:
-    List[int]: List of task sizes, e.g., [3, 2, 6, 2]
+    Dict[str, int]: Dictionary mapping string task indices to their sizes, e.g., {'0': 3, '1': 2, '3': 6, '5': 2}
     """
-    # Ensure the input is a 1D array
     if indices.ndim != 1:
         raise ValueError("Input must be a 1D array")
     
-    # Get the unique indices and their counts
     unique_indices, counts = jnp.unique(indices, return_counts=True)
-    
-    # Ensure the indices are consecutive and start from 0
-    if not jnp.array_equal(unique_indices, jnp.arange(len(unique_indices))):
-        raise ValueError("Indices must be consecutive and start from 0")
-    
-    return counts.tolist()
+    return {str(int(idx)): int(count) for idx, count in zip(unique_indices, counts)}

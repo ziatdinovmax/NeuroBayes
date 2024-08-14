@@ -107,10 +107,17 @@ class FlaxMultiTaskMLP2(nn.Module):
     output_sizes: Sequence[int]
     task_sizes: Sequence[int]
     activation: str = 'tanh'
+    embedding_dim: int = None
 
     def setup(self):
         self.num_tasks = len(self.task_sizes)
         activation_fn = nn.tanh if self.activation == 'tanh' else nn.silu
+
+        # Embedding layer for tasks
+        self.task_embedding = Embedding(
+            self.num_tasks if not self.embedding_dim else self.embedding_dim,
+            self.num_tasks
+        )
 
         # Backbone
         layers = []
@@ -120,26 +127,36 @@ class FlaxMultiTaskMLP2(nn.Module):
         self.backbone = nn.Sequential(layers)
 
         # Heads for different tasks
-        self.heads = [
-            nn.Sequential([
-                nn.Dense(self.backbone_dims[-1], name=f'head_{i}_dense_1'),
+        self.heads = {
+            task_idx: nn.Sequential([
+                nn.Dense(self.backbone_dims[-1], name=f'head_{task_idx}_dense_1'),
                 activation_fn,
-                nn.Dense(self.backbone_dims[-1], name=f'head_{i}_dense_2'),
+                nn.Dense(self.backbone_dims[-1], name=f'head_{task_idx}_dense_2'),
                 activation_fn,
-                nn.Dense(output_size, name=f'head_{i}_dense_3')
-            ]) for i, output_size in enumerate(self.output_sizes)
-        ]
+                nn.Dense(self.output_sizes[int(task_idx)], name=f'head_{task_idx}_dense_3')
+            ]) for task_idx in self.task_sizes.keys()
+        }
 
     def __call__(self, x):
+
+        # Split input features and task level
+        features, task = x[:, :-1], x[:, -1].astype(jnp.int32)
+
+        # Get task embedding
+        task_emb = self.task_embedding(task)
+
+        # Concatenate features with task embedding
+        x = jnp.concatenate([features, task_emb], axis=-1)
+
         # Pass through backbone
         features = self.backbone(x)
 
         # Apply heads based on task assignments
         outputs = []
         start = 0
-        for i, size in enumerate(self.task_sizes):
+        for task_idx, size in self.task_sizes.items():
             end = start + size
-            task_output = self.heads[i](features[start:end])
+            task_output = self.heads[task_idx](features[start:end])
             outputs.append(task_output)
             start = end
 
