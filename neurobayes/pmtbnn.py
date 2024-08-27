@@ -11,25 +11,22 @@ from .utils import split_multitask_model
 from .detnn import DeterministicNN
 
 
-class PartialBNN(MultitaskBNN):
+class PartialMultitaskBNN(MultitaskBNN):
     """
     Partially stochastic NN
     """
     def __init__(self,
                  deterministic_nn: Type[flax.linen.Module],
                  deterministic_weights: Optional[Dict[str, jnp.ndarray]] = None,
-                 input_dim: int = None,
                  noise_prior: Optional[dist.Distribution] = None
                  ) -> None:
-        super().__init__(1, 1)
+        super().__init__(1, 1, 1)
         if deterministic_weights:
             (self.embedding_nn, self.embedding_params,
              self.head_nn) = split_multitask_model(
                  deterministic_nn, deterministic_weights)[:-1]
         else:
             self.untrained_deterministic_nn = deterministic_nn
-            if not input_dim:
-                raise ValueError("Please provide input data dimensions or pre-trained model parameters")  
         if noise_prior is None:
             noise_prior = dist.HalfNormal(1.0)
         self.noise_prior = noise_prior
