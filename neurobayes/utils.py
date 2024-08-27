@@ -186,7 +186,7 @@ def split_multitask_model(trained_model, params):
     embedding_backbone_params = params['backbone']
     head_params = params['head']
 
-    return embedding_backbone, head, embedding_backbone_params, head_params
+    return embedding_backbone, embedding_backbone_params, head, head_params
 
 
 def get_flax_compatible_dict(params_numpyro: Dict[str, jnp.ndarray]) -> Dict[str, Dict[str, jnp.ndarray]]:
