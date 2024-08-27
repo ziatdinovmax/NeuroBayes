@@ -5,7 +5,7 @@ import jax.numpy as jnp
 
 import numpy as np
 
-from .nn import FlaxMLP, FlaxMLP2Head
+from .nn import FlaxMLP, FlaxMLP2Head, EmbeddingBackbone
 
 
 def infer_device(device_preference: str = None):
@@ -166,6 +166,27 @@ def split_mlp2head(model, params, out_dim: int = None):
             last_layer_params[new_key] = val
 
     return truncated_mlp, truncated_params, last_layer_mlp, last_layer_params
+
+
+def split_multitask_model(trained_model, params):
+    # Extract the backbone and head components
+    embedding_backbone = EmbeddingBackbone(
+        backbone_dims=trained_model.backbone_dims,
+        num_tasks=trained_model.num_tasks,
+        embedding_dim=trained_model.embedding_dim,
+        activation=trained_model.activation
+    )
+    head = FlaxMLP(
+        hidden_dims=trained_model.head_dims,
+        output_dim=trained_model.output_dim,
+        activation=trained_model.activation
+    )
+
+    # Extract relevant parameters
+    embedding_backbone_params = params['backbone']
+    head_params = params['head']
+
+    return embedding_backbone, head, embedding_backbone_params, head_params
 
 
 def get_flax_compatible_dict(params_numpyro: Dict[str, jnp.ndarray]) -> Dict[str, Dict[str, jnp.ndarray]]:
