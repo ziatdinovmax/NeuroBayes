@@ -18,18 +18,16 @@ class PartialMultitaskBNN(MultitaskBNN):
     def __init__(self,
                  deterministic_nn: Type[flax.linen.Module],
                  deterministic_weights: Optional[Dict[str, jnp.ndarray]] = None,
+                 num_tasks: int = None,
                  noise_prior: Optional[dist.Distribution] = None
                  ) -> None:
-        super().__init__(1, 1, 1)
+        super().__init__(1, 1, num_tasks, noise_prior=noise_prior)
         if deterministic_weights:
             (self.embedding_nn, self.embedding_params,
              self.head_nn) = split_multitask_model(
                  deterministic_nn, deterministic_weights)[:-1]
         else:
             self.untrained_deterministic_nn = deterministic_nn
-        if noise_prior is None:
-            noise_prior = dist.HalfNormal(1.0)
-        self.noise_prior = noise_prior
     
     def model(self, X: jnp.ndarray, y: jnp.ndarray = None, **kwargs) -> None:
         """BNN probabilistic model"""
