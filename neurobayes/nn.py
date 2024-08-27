@@ -83,10 +83,6 @@ class FlaxMultiTaskMLP(nn.Module):
     embedding_dim: int = None
 
     def setup(self):
-        self.task_embedding = Embedding(
-            self.num_tasks if not self.embedding_dim else self.embedding_dim,
-            self.num_tasks
-        )
         self.backbone = EmbeddingBackbone(self.backbone_dims, self.num_tasks, self.embedding_dim, self.activation)
         self.head = FlaxMLP(self.head_dims, self.output_dim, self.activation)
 
