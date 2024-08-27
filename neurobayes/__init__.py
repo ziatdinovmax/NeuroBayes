@@ -11,6 +11,7 @@ from .phskbnn import HeteroskedasticPartialBNN
 from .uibnn import UncertainInputBNN
 from .detnn import DeterministicNN
 from .mtbnn import MultitaskBNN
+from .pmtbnn import PartialMultitaskBNN
 #from .mtbnn2 import MultitaskBNN2
 from . import kernels
 from . import priors
