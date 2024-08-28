@@ -17,16 +17,18 @@ class MultitaskBNN:
                  input_dim: int,
                  output_dim: int,
                  num_tasks: int,
-                 hidden_dim: List[int] = None,
+                 backbone_dim: List[int] = None,
+                 head_dim: List[int] = None,
                  activation: str = 'tanh',
                  embedding_dim: int = None,
                  noise_prior: Optional[dist.Distribution] = None
                  ) -> None:
         if noise_prior is None:
             noise_prior = dist.HalfNormal(jnp.ones(num_tasks))
-        hdim = hidden_dim if hidden_dim is not None else [32, 16, 8]
+        bdim = backbone_dim if backbone_dim is not None else [32, 16, 8]
+        hdim = head_dim if head_dim is not None else [bdim[-1], bdim[-1]]
         self.nn = FlaxMultiTaskMLP(
-            hdim, output_dim, num_tasks, activation, embedding_dim)
+            bdim, hdim, output_dim, num_tasks, activation, embedding_dim)
         self.input_dim = input_dim
         self.noise_prior = noise_prior
 
