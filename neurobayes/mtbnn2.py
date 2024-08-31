@@ -17,7 +17,7 @@ class MultitaskBNN2:
                  input_dim: int,
                  output_dims: Sequence[int],
                  num_tasks: int,
-                 embedding_dim: int = None,
+                 embedding_dim: int,
                  hidden_dim: List[int] = None,
                  activation: str = 'tanh',
                  noise_prior: Optional[dist.Distribution] = None
@@ -30,6 +30,7 @@ class MultitaskBNN2:
         self.output_dims = output_dims
         self.activation = activation
         self.embedding_dim = embedding_dim
+        self.num_tasks = num_tasks
         self.noise_prior = noise_prior
 
     def model(self, X: jnp.ndarray, y: jnp.ndarray = None, **kwargs) -> None:
@@ -39,7 +40,7 @@ class MultitaskBNN2:
         #X = X[:, :-1]
 
         net = random_flax_module(
-            "nn", self.nn, input_shape=(len(X), self.input_dim),
+            "nn", self.nn, input_shape=(len(X), self.input_dim + 1),
             prior=(lambda name, shape: dist.Cauchy() if name == "bias" else dist.Normal()))
 
         # Pass inputs through a NN with the sampled parameters
@@ -75,7 +76,8 @@ class MultitaskBNN2:
             rng_key: random number generator key
         """
         task_structure = compute_task_sizes(X[:, -1])
-        self.nn = FlaxMultiTaskMLP2(self.hdim, self.output_dims, task_structure, self.activation, self.embedding_dim)
+        self.nn = FlaxMultiTaskMLP2(
+            self.hdim, self.output_dims, task_structure, self.num_tasks, self.embedding_dim, self.activation)
 
         key = rng_key if rng_key is not None else jra.PRNGKey(0)
         X, y = self.set_data(X, y)
