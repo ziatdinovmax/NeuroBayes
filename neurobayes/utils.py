@@ -121,20 +121,20 @@ def nlpd(y: jnp.ndarray, mu: jnp.ndarray, sigma_squared: jnp.ndarray,
     return nlpd
 
 
-def split_mlp(model, params, out_dim: int = None):
+def split_mlp(model, params, n_layers: int = 1, out_dim: int = None):
     """
-    Splits MLP and its weights into two sub-networks: one with last two layers
-    (last hidden layer + output layer) removed and another one consisting only of those two layers.
+    Splits MLP and its weights into two sub-networks: one with last n layers
+    (+ output layer) removed and another one consisting only of those n layers.
     """
     out_dim = out_dim if out_dim is not None else model.output_dim  # there will be a mismatch in last_layer_params if out_dim != model.output_dim
 
-    truncated_mlp = FlaxMLP(model.hidden_dims[:-1], output_dim=0)
-    last_layer_mlp = FlaxMLP(model.hidden_dims[-1:], output_dim=out_dim)
+    truncated_mlp = FlaxMLP(model.hidden_dims[:-n_layers], output_dim=0)
+    last_layer_mlp = FlaxMLP(model.hidden_dims[-n_layers:], output_dim=out_dim)
 
     truncated_params = {}
     last_layer_params = {}
     for i, (key, val) in enumerate(params.items()):
-        if i < len(model.hidden_dims) - 1:
+        if i < len(model.hidden_dims) - n_layers:
             truncated_params[key] = val
         else:
             new_key = f"Dense{i - len(model.hidden_dims[:-1])}"

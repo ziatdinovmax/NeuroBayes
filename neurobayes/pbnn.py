@@ -19,15 +19,18 @@ class PartialBNN(BNN):
                  deterministic_nn: Type[flax.linen.Module],
                  deterministic_weights: Optional[Dict[str, jnp.ndarray]] = None,
                  input_dim: int = None,
+                 num_stochastic_layers: int = 1,
                  noise_prior: Optional[dist.Distribution] = None
                  ) -> None:
         super().__init__(1, 1)
         if deterministic_weights:
             (self.truncated_nn, self.truncated_params,
              self.last_layer_nn) = split_mlp(
-                 deterministic_nn, deterministic_weights)[:-1]
+                 deterministic_nn, deterministic_weights,
+                 num_stochastic_layers)[:-1]
         else:
             self.untrained_deterministic_nn = deterministic_nn
+            self.num_stochastic_layers = num_stochastic_layers
             if not input_dim:
                 raise ValueError("Please provide input data dimensions or pre-trained model parameters")  
         if noise_prior is None:
@@ -55,7 +58,7 @@ class PartialBNN(BNN):
     def fit(self, X: jnp.ndarray, y: jnp.ndarray,
             num_warmup: int = 2000, num_samples: int = 2000,
             num_chains: int = 1, chain_method: str = 'sequential',
-            sgd_epochs: Optional[int] = None,
+            sgd_epochs: Optional[int] = None, sgd_lr: float = 0.01,
             progress_bar: bool = True, device: str = None,
             rng_key: Optional[jnp.array] = None,
             ) -> None:
@@ -71,6 +74,7 @@ class PartialBNN(BNN):
             sgd_epochs:
                 number of SGD training epochs for deterministic NN
                 (if trained weights are not provided at the initialization stage)
+            sgd_lr: SGD learning rate
             chain_method: 'sequential', 'parallel' or 'vectorized'
             progress_bar: show progress bar
             device:
@@ -80,11 +84,13 @@ class PartialBNN(BNN):
         """
         if hasattr(self, "untrained_deterministic_nn"):
             print("Training deterministic NN...")
-            det_nn = DeterministicNN(self.untrained_deterministic_nn, self.input_dim)
+            det_nn = DeterministicNN(
+                self.untrained_deterministic_nn, self.input_dim, learning_rate=sgd_lr)
             det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs)
             (self.truncated_nn, self.truncated_params,
             self.last_layer_nn) = split_mlp(
-                det_nn.model, det_nn.state.params)[:-1]
+                det_nn.model, det_nn.state.params,
+                self.num_stochastic_layers)[:-1]
             print("Training partially Bayesian NN")
         super().fit(X, y, num_warmup, num_samples, num_chains, chain_method, progress_bar, device, rng_key)
 
