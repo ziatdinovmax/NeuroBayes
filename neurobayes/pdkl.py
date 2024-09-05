@@ -25,6 +25,7 @@ class PartialDKL(DKL):
                  deterministic_nn: Type[flax.linen.Module],
                  deterministic_weights: Optional[Dict[str, jnp.ndarray]] = None,
                  input_dim: int = None,
+                 num_stochastic_layers: int = 1,
                  priors: Optional[GPPriors] = None,
                  jitter: float = 1e-6,
                  ) -> None:
@@ -32,11 +33,14 @@ class PartialDKL(DKL):
         if deterministic_weights:
             (self.truncated_nn, self.truncated_params,
              self.nn) = split_mlp(
-                 deterministic_nn, deterministic_weights, latent_dim)[:-1]
+                 deterministic_nn, deterministic_weights,
+                 num_stochastic_layers, latent_dim)[:-1]
         else:
             self.untrained_deterministic_nn = deterministic_nn
+            self.num_stochastic_layers = num_stochastic_layers
             if not input_dim:
-                raise ValueError("Please provide input data dimensions or pre-trained model parameters")  
+                raise ValueError("Please provide input data dimensions or pre-trained model parameters") 
+            self.input_dim = input_dim 
 
     def model(self, X: jnp.ndarray, y: jnp.ndarray = None, **kwargs) -> None:
         """BNN probabilistic model"""
@@ -66,7 +70,7 @@ class PartialDKL(DKL):
     def fit(self, X: jnp.ndarray, y: jnp.ndarray,
             num_warmup: int = 2000, num_samples: int = 2000,
             num_chains: int = 1, chain_method: str = 'sequential',
-            sgd_epochs: Optional[int] = None,
+            sgd_epochs: Optional[int] = None, sgd_lr: float = 0.01,
             progress_bar: bool = True, print_summary: bool = True,
             device: str = None,
             rng_key: Optional[jnp.array] = None,
@@ -80,10 +84,11 @@ class PartialDKL(DKL):
             num_warmup: number of HMC warmup states
             num_samples: number of HMC samples
             num_chains: number of HMC chains
+            chain_method: 'sequential', 'parallel' or 'vectorized'
             sgd_epochs:
                 number of SGD training epochs for deterministic NN
                 (if trained weights are not provided at the initialization stage)
-            chain_method: 'sequential', 'parallel' or 'vectorized'
+            sgd_lr: SGD learning rate
             progress_bar: show progress bar
             print_summary: Print MCMC summary
             device:
@@ -94,11 +99,13 @@ class PartialDKL(DKL):
         if hasattr(self, "untrained_deterministic_nn"):
             print("Training deterministic NN...")
             X = self.set_data(X)
-            det_nn = DeterministicNN(self.untrained_deterministic_nn, self.input_dim)
+            det_nn = DeterministicNN(
+                self.untrained_deterministic_nn, self.input_dim, learning_rate=sgd_lr)
             det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs)
             (self.truncated_nn, self.truncated_params,
             self.nn) = split_mlp(
-                det_nn.model, det_nn.params, self.kernel_dim)[:-1]
+                det_nn.model, det_nn.params,
+                self.num_stochastic_layers, self.kernel_dim)[:-1]
             print("Training partially Bayesian DKL")
         super().fit(X, y, num_warmup, num_samples, num_chains, chain_method, progress_bar, print_summary, device, rng_key)
 
