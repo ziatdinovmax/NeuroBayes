@@ -13,7 +13,21 @@ from .detnn import DeterministicNN
 
 class PartialBNN(BNN):
     """
-    Partially stochastic NN
+    Partially stochastic (Bayesian) neural network
+
+    Args:
+        deterministic_nn:
+            Neural network architecture
+            (will be split into determinsitic and stochastic parts)
+        deterministic_weights:
+            Pre-trained deterministic weights, If not provided,
+            the deterministic_nn will be trained from scratch when running .fit() method
+        input_dim:
+            Number of features in the input data
+        num_stochastic_layers:
+            Number of layers at the end of deterministic_nn to be treated as fully stochastic (Bayesian)
+        noise_prior:
+            Custom prior on observational noise distribution
     """
     def __init__(self,
                  deterministic_nn: Type[flax.linen.Module],
@@ -39,7 +53,7 @@ class PartialBNN(BNN):
         self.noise_prior = noise_prior
     
     def model(self, X: jnp.ndarray, y: jnp.ndarray = None, **kwargs) -> None:
-        """BNN probabilistic model"""
+        """Partial BNN model"""
 
         X = self.truncated_nn.apply({'params': self.truncated_params}, X)
 
@@ -72,6 +86,7 @@ class PartialBNN(BNN):
             num_warmup: number of HMC warmup states
             num_samples: number of HMC samples
             num_chains: number of HMC chains
+            chain_method: choose between 'sequential', 'vectorized', and 'parallel'
             sgd_epochs:
                 number of SGD training epochs for deterministic NN
                 (if trained weights are not provided at the initialization stage)
