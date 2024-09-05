@@ -91,7 +91,6 @@ class PartialBNN(BNN):
                 number of SGD training epochs for deterministic NN
                 (if trained weights are not provided at the initialization stage)
             sgd_lr: SGD learning rate
-            chain_method: 'sequential', 'parallel' or 'vectorized'
             progress_bar: show progress bar
             device:
                 The device (e.g. "cpu" or "gpu") perform computation on ('cpu', 'gpu'). If None, computation
