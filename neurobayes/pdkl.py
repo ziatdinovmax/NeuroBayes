@@ -104,7 +104,7 @@ class PartialDKL(DKL):
             det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs)
             (self.truncated_nn, self.truncated_params,
             self.nn) = split_mlp(
-                det_nn.model, det_nn.params,
+                det_nn.model, det_nn.state.params,
                 self.num_stochastic_layers, self.kernel_dim)[:-1]
             print("Training partially Bayesian DKL")
         super().fit(X, y, num_warmup, num_samples, num_chains, chain_method, progress_bar, print_summary, device, rng_key)
