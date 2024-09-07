@@ -20,7 +20,8 @@ class DeterministicNN:
                  input_dim: int,
                  loss: str = 'homoskedastic',
                  learning_rate: float = 0.01,
-                 map: bool = True) -> None:
+                 map: bool = True,
+                 sigma: float = 1.0) -> None:
         
         self.model = architecture
         self.loss = loss
@@ -33,6 +34,7 @@ class DeterministicNN:
             batch_stats=None
         )
         self.map = map
+        self.sigma = sigma
 
     def mse_loss(self, params: Dict, inputs: jnp.ndarray,
                  targets: jnp.ndarray) -> jnp.ndarray:
