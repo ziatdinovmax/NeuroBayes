@@ -7,6 +7,8 @@ import optax
 from functools import partial
 from tqdm import tqdm
 
+from .utils import split_in_batches
+
 
 class TrainState(train_state.TrainState):
     batch_stats: Any
@@ -48,13 +50,31 @@ class DeterministicNN:
         state = state.apply_gradients(grads=grads)
         return state, loss
 
-    def train(self, X_train: jnp.ndarray, y_train: jnp.ndarray, epochs: int) -> None:
+    def train(self, X_train: jnp.ndarray, y_train: jnp.ndarray, epochs: int, batch_size: int = None) -> None:
         X_train, y_train = self.set_data(X_train, y_train)
-        with tqdm(total=epochs, desc="Training Progress", leave=True) as pbar:
+        
+        if batch_size is None or batch_size >= len(X_train):
+            batch_size = len(X_train)
+        
+        X_batches = split_in_batches(X_train, batch_size)
+        y_batches = split_in_batches(y_train, batch_size)
+        num_batches = len(X_batches)
+        
+        with tqdm(total=epochs * num_batches, desc="Training Progress", leave=True) as pbar:
             for epoch in range(epochs):
-                self.state, loss = self.train_step(self.state, X_train, y_train)
-                pbar.update(1)
-                pbar.set_postfix_str(f"Epoch {epoch+1}, Loss: {loss:.4f}")
+                epoch_loss = 0.0
+                for i, (X_batch, y_batch) in enumerate(zip(X_batches, y_batches)):
+                    self.state, batch_loss = self.train_step(self.state, X_batch, y_batch)
+                    epoch_loss += batch_loss
+                    
+                    pbar.update(1)
+                    if num_batches > 1:
+                        pbar.set_postfix_str(f"Epoch {epoch+1}/{epochs}, Batch {i+1}/{num_batches}, Loss: {batch_loss:.4f}")
+                    else:
+                        pbar.set_postfix_str(f"Epoch {epoch+1}/{epochs}, Loss: {batch_loss:.4f}")
+                
+                avg_epoch_loss = epoch_loss / num_batches
+                pbar.set_postfix_str(f"Epoch {epoch+1}/{epochs}, Avg Loss: {avg_epoch_loss:.4f}")
 
     @partial(jax.jit, static_argnums=(0,))
     def _predict(self, state, X):
@@ -70,4 +90,3 @@ class DeterministicNN:
             y = y[:, None] if y.ndim < 2 else y
             return X, y
         return X
-
