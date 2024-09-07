@@ -19,7 +19,8 @@ class DeterministicNN:
                  architecture: Type[flax.linen.Module],
                  input_dim: int,
                  loss: str = 'homoskedastic',
-                 learning_rate: float = 0.01) -> None:
+                 learning_rate: float = 0.01,
+                 map: bool = True) -> None:
         
         self.model = architecture
         self.loss = loss
@@ -31,6 +32,7 @@ class DeterministicNN:
             tx=optax.adam(learning_rate),
             batch_stats=None
         )
+        self.map = map
 
     def mse_loss(self, params: Dict, inputs: jnp.ndarray,
                  targets: jnp.ndarray) -> jnp.ndarray:
@@ -41,12 +43,24 @@ class DeterministicNN:
                              targets: jnp.ndarray) -> jnp.ndarray:
         y_pred, y_var = self.model.apply({'params': params}, inputs)
         return jnp.mean(0.5 * jnp.log(y_var) + 0.5 * (targets - y_pred)**2 / y_var)
+    
+    def gaussian_prior(self, params: Dict) -> jnp.ndarray:
+        l2_norm = sum(jnp.sum(jnp.square(p)) for p in jax.tree_util.tree_leaves(params))
+        return l2_norm / (2 * self.sigma**2)  # Regularization term
+    
+    def total_loss(self, params: Dict, inputs: jnp.ndarray, targets: jnp.ndarray) -> jnp.ndarray:
+        # Compute the base loss
+        loss_fn = self.mse_loss if self.loss == 'homoskedastic' else self.heteroskedastic_loss
+        loss = loss_fn(params, inputs, targets)
+        # Optionally add Gaussian prior to the loss
+        if self.map:
+            prior_loss = self.gaussian_prior(params)
+            loss += prior_loss
+        return loss
 
     @partial(jax.jit, static_argnums=(0,))
     def train_step(self, state, inputs, targets):
-        loss_fn = self.mse_loss if self.loss == 'homoskedastic' else self.heteroskedastic_loss
-
-        loss, grads = jax.value_and_grad(loss_fn)(state.params, inputs, targets)
+        loss, grads = jax.value_and_grad(self.total_loss)(state.params, inputs, targets)
         state = state.apply_gradients(grads=grads)
         return state, loss
 
