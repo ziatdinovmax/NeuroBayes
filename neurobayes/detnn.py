@@ -35,6 +35,7 @@ class DeterministicNN:
         )
         self.map = map
         self.sigma = sigma
+        self.params_history = []
 
     def mse_loss(self, params: Dict, inputs: jnp.ndarray,
                  targets: jnp.ndarray) -> jnp.ndarray:
@@ -56,7 +57,7 @@ class DeterministicNN:
         loss = loss_fn(params, inputs, targets)
         # Optionally add Gaussian prior to the loss
         if self.map:
-            prior_loss = self.gaussian_prior(params)
+            prior_loss = self.gaussian_prior(params) / len(inputs)
             loss += prior_loss
         return loss
 
@@ -76,21 +77,23 @@ class DeterministicNN:
         y_batches = split_in_batches(y_train, batch_size)
         num_batches = len(X_batches)
         
-        with tqdm(total=epochs * num_batches, desc="Training Progress", leave=True) as pbar:
+        with tqdm(total=epochs, desc="Training Progress", leave=True) as pbar:  # Progress bar tracks epochs now
             for epoch in range(epochs):
                 epoch_loss = 0.0
                 for i, (X_batch, y_batch) in enumerate(zip(X_batches, y_batches)):
                     self.state, batch_loss = self.train_step(self.state, X_batch, y_batch)
                     epoch_loss += batch_loss
-                    
-                    pbar.update(1)
-                    if num_batches > 1:
-                        pbar.set_postfix_str(f"Epoch {epoch+1}/{epochs}, Batch {i+1}/{num_batches}, Loss: {batch_loss:.4f}")
-                    else:
-                        pbar.set_postfix_str(f"Epoch {epoch+1}/{epochs}, Loss: {batch_loss:.4f}")
+
+                # Start storing parameters in the last 10 epochs
+                if epochs - epoch <= 10:
+                    self._store_params(self.state.params)
                 
                 avg_epoch_loss = epoch_loss / num_batches
                 pbar.set_postfix_str(f"Epoch {epoch+1}/{epochs}, Avg Loss: {avg_epoch_loss:.4f}")
+                pbar.update(1)
+
+        if self.params_history:  # Ensure there is something to average
+            self.state = self.state.replace(params=self.average_params())
 
     @partial(jax.jit, static_argnums=(0,))
     def _predict(self, state, X):
@@ -106,3 +109,16 @@ class DeterministicNN:
             y = y[:, None] if y.ndim < 2 else y
             return X, y
         return X
+    
+    def _store_params(self, params: Dict) -> None:
+        self.params_history.append(params)
+
+    def average_params(self) -> Dict:
+        if not self.params_history:
+            return self.state.params
+        # Compute the element-wise average of all stored parameters
+        avg_params = jax.tree_util.tree_map(
+            lambda *param_trees: jnp.mean(jnp.stack(param_trees), axis=0),
+            *self.params_history
+        )
+        return avg_params
