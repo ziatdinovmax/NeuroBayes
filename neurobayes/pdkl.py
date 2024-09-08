@@ -71,6 +71,7 @@ class PartialDKL(DKL):
             num_warmup: int = 2000, num_samples: int = 2000,
             num_chains: int = 1, chain_method: str = 'sequential',
             sgd_epochs: Optional[int] = None, sgd_lr: float = 0.01,
+            sgd_batch_size: Optional[int] = None,
             progress_bar: bool = True, print_summary: bool = True,
             device: str = None,
             rng_key: Optional[jnp.array] = None,
@@ -101,7 +102,7 @@ class PartialDKL(DKL):
             X = self.set_data(X)
             det_nn = DeterministicNN(
                 self.untrained_deterministic_nn, self.input_dim, learning_rate=sgd_lr)
-            det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs)
+            det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs, sgd_batch_size)
             (self.truncated_nn, self.truncated_params,
             self.nn) = split_mlp(
                 det_nn.model, det_nn.state.params,
