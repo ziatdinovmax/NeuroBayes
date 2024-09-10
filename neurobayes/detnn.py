@@ -21,7 +21,8 @@ class DeterministicNN:
                  loss: str = 'homoskedastic',
                  learning_rate: float = 0.01,
                  map: bool = True,
-                 sigma: float = 1.0) -> None:
+                 sigma: float = 1.0,
+                 swa_epochs: int = 10) -> None:
         
         self.model = architecture
         self.loss = loss
@@ -35,6 +36,7 @@ class DeterministicNN:
         )
         self.map = map
         self.sigma = sigma
+        self.average_last_n_weights = swa_epochs
         self.params_history = []
 
     def mse_loss(self, params: Dict, inputs: jnp.ndarray,
@@ -84,8 +86,8 @@ class DeterministicNN:
                     self.state, batch_loss = self.train_step(self.state, X_batch, y_batch)
                     epoch_loss += batch_loss
 
-                # Start storing parameters in the last 10 epochs
-                if epochs - epoch <= 10:
+                # Start storing parameters in the last n epochs
+                if epochs - epoch <= self.average_last_n_weights:
                     self._store_params(self.state.params)
                 
                 avg_epoch_loss = epoch_loss / num_batches
