@@ -15,6 +15,20 @@ class TrainState(train_state.TrainState):
 
 class DeterministicNN:
 
+    """
+    Class for training and predicting with deterministic (as in non-stochastic)
+    neural network.
+
+    Args:
+        architecture: a Flax model
+        input_dim: input dimensions (aka number of features)
+        loss: type of loss, 'homoskedastic' (default) or 'heteroskedastic'
+        learning_rate: SGD learning rate
+        map: Uses maximum a posteriori approximation with a zero-centered Gaussian prior
+        sigma: Standard deviation for a Gaussian prior
+        swa_epochs: Number of epochs for stochastic weight averaging at the end of training trajectory (defautls to 10)
+    """
+
     def __init__(self,
                  architecture: Type[flax.linen.Module],
                  input_dim: int,
@@ -25,6 +39,9 @@ class DeterministicNN:
                  swa_epochs: int = 10) -> None:
         
         self.model = architecture
+
+        if loss not in ['homoskedastic', 'heteroskedastic']:
+            raise ValueError("Select between 'homoskedastic' or 'heteroskedastic' loss")
         self.loss = loss
         key = jax.random.PRNGKey(0)
         params = self.model.init(key, jnp.ones((1, input_dim)))['params']
