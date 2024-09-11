@@ -16,7 +16,7 @@ kernel_fn_type = Callable[[jnp.ndarray, jnp.ndarray, Dict[str, jnp.ndarray], jnp
 
 class PartialDKL(DKL):
     """
-    Partially stochastic NN
+    Partially stochastic DKL
     """
 
     def __init__(self,
@@ -43,7 +43,7 @@ class PartialDKL(DKL):
             self.input_dim = input_dim 
 
     def model(self, X: jnp.ndarray, y: jnp.ndarray = None, **kwargs) -> None:
-        """BNN probabilistic model"""
+        """DKL probabilistic model"""
         # Get inputs through a deterministic NN part
         X = self.truncated_nn.apply({'params': self.truncated_params}, X)
         # Fully stochastic NN part
@@ -71,7 +71,7 @@ class PartialDKL(DKL):
             num_warmup: int = 2000, num_samples: int = 2000,
             num_chains: int = 1, chain_method: str = 'sequential',
             sgd_epochs: Optional[int] = None, sgd_lr: float = 0.01,
-            sgd_batch_size: Optional[int] = None,
+            sgd_batch_size: Optional[int] = None, sgd_swa_epochs: Optional[int] = 10,
             progress_bar: bool = True, print_summary: bool = True,
             device: str = None,
             rng_key: Optional[jnp.array] = None,
@@ -89,7 +89,11 @@ class PartialDKL(DKL):
             sgd_epochs:
                 number of SGD training epochs for deterministic NN
                 (if trained weights are not provided at the initialization stage)
-            sgd_lr: SGD learning rate
+            sgd_lr: SGD learning rate (if trained weights are not provided at the initialization stage)
+            sgd_batch_size:
+                Batch size for SGD training (if trained weights are not provided at the initialization stage).
+                Defaults to None, meaning that an entire dataset is passed through an NN.
+            sgd_swa_epochs: Number of epochs for stochastic weight averaging at the end of training trajectory (defautls to 10)
             progress_bar: show progress bar
             print_summary: Print MCMC summary
             device:
@@ -101,7 +105,8 @@ class PartialDKL(DKL):
             print("Training deterministic NN...")
             X = self.set_data(X)
             det_nn = DeterministicNN(
-                self.untrained_deterministic_nn, self.input_dim, learning_rate=sgd_lr)
+                self.untrained_deterministic_nn, self.input_dim, learning_rate=sgd_lr,
+                sgd_batch_size=sgd_batch_size, swa_epochs=sgd_swa_epochs)
             det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs, sgd_batch_size)
             (self.truncated_nn, self.truncated_params,
             self.nn) = split_mlp(
