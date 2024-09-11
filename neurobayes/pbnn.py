@@ -74,7 +74,7 @@ class PartialBNN(BNN):
             num_warmup: int = 2000, num_samples: int = 2000,
             num_chains: int = 1, chain_method: str = 'sequential',
             sgd_epochs: Optional[int] = None, sgd_lr: Optional[float] = 0.01,
-            sgd_swa_epochs: Optional[int] = 10, sgd_batch_size: Optional[int] = None,
+            sgd_batch_size: Optional[int] = None, sgd_swa_epochs: Optional[int] = 10,
             progress_bar: bool = True, device: str = None,
             rng_key: Optional[jnp.array] = None) -> None:
         """
@@ -94,7 +94,7 @@ class PartialBNN(BNN):
             sgd_batch_size:
                 Batch size for SGD training (if trained weights are not provided at the initialization stage).
                 Defaults to None, meaning that an entire dataset is passed through an NN.
-            swa_epochs: Number of epochs for stochastic weight averaging at the end of training trajectory (defautls to 10)
+            sgd_swa_epochs: Number of epochs for stochastic weight averaging at the end of training trajectory (defautls to 10)
             progress_bar: show progress bar
             device:
                 The device (e.g. "cpu" or "gpu") perform computation on ('cpu', 'gpu'). If None, computation
