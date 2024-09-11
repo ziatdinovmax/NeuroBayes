@@ -49,22 +49,3 @@ class HeteroskedasticBNN(BNN):
         pred = self.sample_from_posterior(
             jra.PRNGKey(0), X_new, samples, return_sites=['sig'])
         return pred['sig'].mean(0)
-
-    # def sample_single_posterior_predictive(self, rng_key, X_new, params, n_draws):
-    #     loc, sigma = self.nn(X_new, params)
-    #     sample = dist.Normal(loc, sigma).sample(rng_key, (n_draws,)).mean(0)
-    #     return loc, sample
-
-    # def predict_noise(self, X_new: jnp.ndarray) -> jnp.ndarray:
-    #     X_new = self.set_data(X_new)
-    #     samples = self.get_samples(chain_dim=False)
-    #     predictive = jax.vmap(lambda params: self.nn(X_new, params))
-    #     sigma = predictive(samples)[-1]
-    #     return sigma.mean(0)
-
-    # def get_prediction_and_noise_stats(self, X_new: jnp.ndarray) -> jnp.ndarray:
-    #     X_new = self.set_data(X_new)
-    #     samples = self.get_samples(chain_dim=False)
-    #     predictive = jax.vmap(lambda params: self.nn(X_new, params))
-    #     mu, sig = predictive(samples)
-    #     return (mu.mean(0), mu.var(0)), (sig.mean(0), sig.var(0))
