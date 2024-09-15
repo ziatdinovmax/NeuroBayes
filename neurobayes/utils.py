@@ -86,9 +86,24 @@ def mse(y_pred: jnp.ndarray, y_true: jnp.ndarray) -> jnp.ndarray:
     """
     Calculates the mean squared error between true and predicted values.
     """
-    # Compute the mean squared error
     mse = jnp.mean((y_true - y_pred) ** 2)
     return mse
+
+
+def rmse(y_pred: jnp.ndarray, y_true: jnp.ndarray) -> jnp.ndarray:
+    """
+    Calculates the root mean squared error between true and predicted values.
+    """
+    mse = mse(y_pred, y_true)
+    return jnp.sqrt(mse)
+
+
+def mae(y_pred: jnp.ndarray, y_true: jnp.ndarray) -> jnp.ndarray:
+    """
+    Calculates the mean absolute error between true and predicted values.
+    """
+    mae = jnp.mean(jnp.abs(y_true - y_pred))
+    return mae
 
 
 def nlpd(y: jnp.ndarray, mu: jnp.ndarray, sigma_squared: jnp.ndarray,
