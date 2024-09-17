@@ -36,7 +36,7 @@ class PartialBNN(BNN):
                  num_stochastic_layers: int = 1,
                  noise_prior: Optional[dist.Distribution] = None
                  ) -> None:
-        super().__init__(None, None)
+        super().__init__(None, None, noise_prior=noise_prior)
         if deterministic_weights:
             (self.truncated_nn, self.truncated_params,
              self.last_layer_nn) = split_mlp(
@@ -48,9 +48,6 @@ class PartialBNN(BNN):
             if not input_dim:
                 raise ValueError("Please provide input data dimensions or pre-trained model parameters")  
             self.input_dim = input_dim
-        if noise_prior is None:
-            noise_prior = dist.HalfNormal(1.0)
-        self.noise_prior = noise_prior
     
     def model(self, X: jnp.ndarray, y: jnp.ndarray = None, **kwargs) -> None:
         """Partial BNN model"""
