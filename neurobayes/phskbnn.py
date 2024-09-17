@@ -23,8 +23,8 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
                  ) -> None:
         super().__init__(None, None)
         if deterministic_weights:
-            (self.truncated_nn, self.truncated_params,
-                self.last_layer_nn) = split_mlp2head(
+            (self.subnet1, self.subnet1_params,
+                self.subnet2) = split_mlp2head(
                     deterministic_nn, deterministic_weights)[:-1]
         else:
             self.untrained_deterministic_nn = deterministic_nn
@@ -36,10 +36,10 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
     def model(self, X: jnp.ndarray, y: jnp.ndarray = None, **kwargs) -> None:
         """Heteroskedastik (partial) BNN probabilistic model"""
 
-        X = self.truncated_nn.apply({'params': self.truncated_params}, X)
+        X = self.subnet1.apply({'params': self.subnet1_params}, X)
 
         bnn = random_flax_module(
-            "nn", self.last_layer_nn, input_shape=(1, self.truncated_nn.hidden_dims[-1]),
+            "nn", self.subnet2, input_shape=(1, self.subnet1.hidden_dims[-1]),
             prior=(lambda name, shape: dist.Cauchy() if name == "bias" else dist.Normal()))
 
         # Pass inputs through a NN with the sampled parameters
@@ -55,8 +55,8 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
             num_warmup: int = 2000, num_samples: int = 2000,
             num_chains: int = 1, chain_method: str = 'sequential',
             sgd_epochs: Optional[int] = None, sgd_lr: Optional[float] = 0.01,
-            sgd_batch_size: Optional[int] = None, sgd_swa_epochs: Optional[int] = 10,
-            progress_bar: bool = True, device: str = None,
+            sgd_batch_size: Optional[int] = None, sgd_wa_epochs: Optional[int] = 10,
+            map_sigma: float = 1.0, progress_bar: bool = True, device: str = None,
             rng_key: Optional[jnp.array] = None) -> None:
         """
         Run HMC to infer parameters of the heteroskedastic BNN
@@ -75,7 +75,8 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
             sgd_batch_size:
                 Batch size for SGD training (if trained weights are not provided at the initialization stage).
                 Defaults to None, meaning that an entire dataset is passed through an NN.
-            sgd_swa_epochs: Number of epochs for stochastic weight averaging at the end of training trajectory (defautls to 10)
+            sgd_wa_epochs: Number of epochs for stochastic weight averaging at the end of SGD training trajectory (defautls to 10)
+            map_sigma: sigma in gaussian prior for regularized SGD training
             progress_bar: show progress bar
             device:
                 The device (e.g. "cpu" or "gpu") perform computation on ('cpu', 'gpu'). If None, computation
@@ -86,10 +87,10 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
             print("Training deterministic NN...")
             det_nn = DeterministicNN(
                 self.untrained_deterministic_nn, self.input_dim,
-                learning_rate=sgd_lr, swa_epochs=sgd_swa_epochs)
+                learning_rate=sgd_lr, swa_epochs=sgd_wa_epochs, sigma=map_sigma)
             det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs, sgd_batch_size)
-            (self.truncated_nn, self.truncated_params,
-                self.last_layer_nn) = split_mlp2head(
+            (self.subnet1, self.subnet1_params,
+                self.subnet2) = split_mlp2head(
                     det_nn.model, det_nn.state.params,
                 self.num_stochastic_layers)[:-1]
             print("Training partially Bayesian NN")

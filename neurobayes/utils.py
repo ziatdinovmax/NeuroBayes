@@ -143,44 +143,44 @@ def split_mlp(model, params, n_layers: int = 1, out_dim: int = None):
     """
     out_dim = out_dim if out_dim is not None else model.output_dim  # there will be a mismatch in last_layer_params if out_dim != model.output_dim
 
-    truncated_mlp = FlaxMLP(model.hidden_dims[:-n_layers], output_dim=0)
-    last_layer_mlp = FlaxMLP(model.hidden_dims[-n_layers:], output_dim=out_dim)
+    subnet1 = FlaxMLP(model.hidden_dims[:-n_layers], output_dim=0, activation=model.activation)
+    subnet2 = FlaxMLP(model.hidden_dims[-n_layers:], output_dim=out_dim, activation=model.activation)
 
-    truncated_params = {}
-    last_layer_params = {}
+    subnet1_params = {}
+    subnet2_params = {}
     for i, (key, val) in enumerate(params.items()):
         if i < len(model.hidden_dims) - n_layers:
-            truncated_params[key] = val
+            subnet1_params[key] = val
         else:
-            new_key = f"Dense{i - len(model.hidden_dims[:-1])}"
-            last_layer_params[new_key] = val
+            new_key = f"Dense{i - len(model.hidden_dims[:n_layers])}"
+            subnet2_params[new_key] = val
 
-    return truncated_mlp, truncated_params, last_layer_mlp, last_layer_params
+    return subnet1, subnet1_params, subnet2, subnet2_params
 
 
-def split_mlp2head(model, params, out_dim: int = None):
+def split_mlp_2head(model, params, n_layers: int = 1, out_dim: int = None):
     """
-    Splits MLP2Head and its weights into two sub-networks: one with last hidden layer
-    and output heads removed, and another consisting only of the last hidden layer and output heads.
+    Splits MLP2Head and its weights into two sub-networks: one with last n layers
+    (+ output heads) removed and another one consisting of those n layers and the output heads.
     """
     out_dim = out_dim if out_dim is not None else model.output_dim
 
-    truncated_mlp = FlaxMLP2Head(model.hidden_dims[:-1], output_dim=0)
-    last_layer_mlp = FlaxMLP2Head(model.hidden_dims[-1:], output_dim=out_dim)
+    subnet1 = FlaxMLP(model.hidden_dims[:-n_layers], output_dim=0, activation=model.activation)
+    subnet2 = FlaxMLP2Head(model.hidden_dims[-n_layers:], output_dim=out_dim, activation=model.activation)
 
-    truncated_params = {}
-    last_layer_params = {}
-    for key, val in params.items():
-        if key.startswith('Dense') and int(key[5:]) < len(model.hidden_dims) - 1:
-            truncated_params[key] = val
+    subnet1_params = {}
+    subnet2_params = {}
+    
+    for i, (key, val) in enumerate(params.items()):
+        if key in ['MeanHead', 'VarianceHead']:
+            subnet2_params[key] = val
+        elif i < len(model.hidden_dims) - n_layers:
+            subnet1_params[key] = val
         else:
-            if key.startswith('Dense'):
-                new_key = f"Dense0"
-            else:  # MeanHead or VarianceHead
-                new_key = key
-            last_layer_params[new_key] = val
+            new_key = f"Dense{i - (len(model.hidden_dims) - n_layers)}"
+            subnet2_params[new_key] = val
 
-    return truncated_mlp, truncated_params, last_layer_mlp, last_layer_params
+    return subnet1, subnet1_params, subnet2, subnet2_params
 
 
 def split_multitask_model(trained_model, params):

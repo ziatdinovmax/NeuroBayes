@@ -92,7 +92,7 @@ class PartialDKL(DKL):
             sgd_batch_size:
                 Batch size for SGD training (if trained weights are not provided at the initialization stage).
                 Defaults to None, meaning that an entire dataset is passed through an NN.
-            sgd_wa_epochs: Number of epochs for stochastic weight averaging at the end of training trajectory (defautls to 10)
+            sgd_wa_epochs: Number of epochs for stochastic weight averaging at the end of SGD training trajectory (defautls to 10)
             map_sigma: sigma in gaussian prior for regularized SGD training
             progress_bar: show progress bar
             print_summary: Print MCMC summary

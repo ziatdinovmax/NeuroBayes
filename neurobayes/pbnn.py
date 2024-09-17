@@ -38,8 +38,8 @@ class PartialBNN(BNN):
                  ) -> None:
         super().__init__(None, None, noise_prior=noise_prior)
         if deterministic_weights:
-            (self.truncated_nn, self.truncated_params,
-             self.last_layer_nn) = split_mlp(
+            (self.subnet1, self.subnet1_params,
+             self.subnet2) = split_mlp(
                  deterministic_nn, deterministic_weights,
                  num_stochastic_layers)[:-1]
         else:
@@ -52,10 +52,10 @@ class PartialBNN(BNN):
     def model(self, X: jnp.ndarray, y: jnp.ndarray = None, **kwargs) -> None:
         """Partial BNN model"""
 
-        X = self.truncated_nn.apply({'params': self.truncated_params}, X)
+        X = self.subnet1.apply({'params': self.subnet1_params}, X)
 
         bnn = random_flax_module(
-            "nn", self.last_layer_nn, input_shape=(1, self.truncated_nn.hidden_dims[-1]),
+            "nn", self.subnet2, input_shape=(1, self.subnet1.hidden_dims[-1]),
             prior=(lambda name, shape: dist.Cauchy() if name == "bias" else dist.Normal()))
 
         # Pass inputs through a NN with the sampled parameters
@@ -91,7 +91,7 @@ class PartialBNN(BNN):
             sgd_batch_size:
                 Batch size for SGD training (if trained weights are not provided at the initialization stage).
                 Defaults to None, meaning that an entire dataset is passed through an NN.
-            sgd_wa_epochs: Number of epochs for stochastic weight averaging at the end of training trajectory (defautls to 10)
+            sgd_wa_epochs: Number of epochs for stochastic weight averaging at the end of SGD training trajectory (defautls to 10)
             map_sigma: sigma in gaussian prior for regularized SGD training
             progress_bar: show progress bar
             device:
@@ -105,8 +105,8 @@ class PartialBNN(BNN):
                 self.untrained_deterministic_nn, self.input_dim,
                 learning_rate=sgd_lr, swa_epochs=sgd_wa_epochs, sigma=map_sigma)
             det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs, sgd_batch_size)
-            (self.truncated_nn, self.truncated_params,
-            self.last_layer_nn) = split_mlp(
+            (self.subnet1, self.subnet1_params,
+            self.subnet2) = split_mlp(
                 det_nn.model, det_nn.state.params,
                 self.num_stochastic_layers)[:-1]
             print("Training partially Bayesian NN")
