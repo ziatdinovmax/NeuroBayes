@@ -58,7 +58,7 @@ class BNN:
             num_chains: int = 1, chain_method: str = 'sequential',
             progress_bar: bool = True, device: str = None,
             rng_key: Optional[jnp.array] = None,
-            extra_fields: Optional[Tuple[str]] = None
+            extra_fields: Optional[Tuple[str]] = ()
             ) -> None:
         """
         Run HMC to infer parameters of the BNN

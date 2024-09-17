@@ -60,7 +60,7 @@ class GP:
             print_summary: bool = True,
             device: str = None,
             rng_key: jnp.array = None,
-            extra_fields: Optional[Tuple[str]] = None
+            extra_fields: Optional[Tuple[str]] = ()
             ) -> None:
         """
         Run Hamiltonian Monter Carlo to infer the GP parameters

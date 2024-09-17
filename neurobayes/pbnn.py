@@ -73,8 +73,8 @@ class PartialBNN(BNN):
             sgd_epochs: Optional[int] = None, sgd_lr: Optional[float] = 0.01,
             sgd_batch_size: Optional[int] = None, sgd_wa_epochs: Optional[int] = 10,
             map_sigma: float = 1.0, progress_bar: bool = True, device: str = None,
-            extra_fields: Optional[Tuple[str]] = None,
-            rng_key: Optional[jnp.array] = None) -> None:
+            rng_key: Optional[jnp.array] = None, extra_fields: Optional[Tuple[str]] = ()
+            ) -> None:
         """
         Run HMC to infer parameters of the BNN
 

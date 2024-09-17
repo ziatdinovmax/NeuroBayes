@@ -74,7 +74,7 @@ class PartialDKL(DKL):
             sgd_batch_size: Optional[int] = None, sgd_wa_epochs: Optional[int] = 10,
             map_sigma: float = 1.0, progress_bar: bool = True, print_summary: bool = True,
             device: str = None, rng_key: Optional[jnp.array] = None,
-            ) -> None:
+            extra_fields: Optional[Tuple[str]] = ()) -> None:
         """
         Run HMC to infer parameters of the DKL
 
@@ -100,6 +100,10 @@ class PartialDKL(DKL):
                 The device (e.g. "cpu" or "gpu") perform computation on ('cpu', 'gpu'). If None, computation
                 is performed on the JAX default device.
             rng_key: random number generator key
+            extra_fields:
+                Extra fields (e.g. 'accept_prob') to collect during the HMC run.
+                The extra fields are accessible from model.mcmc.get_extra_fields() after model training.
+            
         """
         if hasattr(self, "untrained_deterministic_nn"):
             print("Training deterministic NN...")
@@ -113,7 +117,7 @@ class PartialDKL(DKL):
                 det_nn.model, det_nn.state.params,
                 self.num_stochastic_layers, self.kernel_dim)[:-1]
             print("Training partially Bayesian DKL")
-        super().fit(X, y, num_warmup, num_samples, num_chains, chain_method, progress_bar, print_summary, device, rng_key)
+        super().fit(X, y, num_warmup, num_samples, num_chains, chain_method, progress_bar, print_summary, device, rng_key, extra_fields)
 
     def compute_gp_posterior(self,
                              X_new: jnp.ndarray,
