@@ -59,7 +59,8 @@ class GP:
             progress_bar: bool = True,
             print_summary: bool = True,
             device: str = None,
-            rng_key: jnp.array = None
+            rng_key: jnp.array = None,
+            extra_fields: Optional[Tuple[str]] = None
             ) -> None:
         """
         Run Hamiltonian Monter Carlo to infer the GP parameters
@@ -77,6 +78,9 @@ class GP:
                 The device (e.g. "cpu" or "gpu") perform computation on ('cpu', 'gpu'). If None, computation
                 is performed on the JAX default device.
             rng_key: random number generator key
+            extra_fields:
+                Extra fields (e.g. 'accept_prob') to collect during the HMC run.
+                The extra fields are accessible from model.mcmc.get_extra_fields() after model training.
         """
         key = rng_key if rng_key is not None else jra.PRNGKey(0)
         X, y = self.set_data(X, y)
@@ -95,7 +99,7 @@ class GP:
             progress_bar=progress_bar,
             jit_model_args=False,
         )
-        self.mcmc.run(key, X, y)
+        self.mcmc.run(key, X, y, extra_fields=extra_fields)
 
         if print_summary:
             self.print_summary()

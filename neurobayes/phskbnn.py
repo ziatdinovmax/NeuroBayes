@@ -1,4 +1,4 @@
-from typing import List, Optional, Type, Dict
+from typing import List, Optional, Type, Dict, Tuple
 import jax.random as jra
 import jax.numpy as jnp
 import numpyro
@@ -57,7 +57,8 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
             sgd_epochs: Optional[int] = None, sgd_lr: Optional[float] = 0.01,
             sgd_batch_size: Optional[int] = None, sgd_wa_epochs: Optional[int] = 10,
             map_sigma: float = 1.0, progress_bar: bool = True, device: str = None,
-            rng_key: Optional[jnp.array] = None) -> None:
+            rng_key: Optional[jnp.array] = None, extra_fields: Optional[Tuple[str]] = None
+            ) -> None:
         """
         Run HMC to infer parameters of the heteroskedastic BNN
 
@@ -82,6 +83,9 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
                 The device (e.g. "cpu" or "gpu") perform computation on ('cpu', 'gpu'). If None, computation
                 is performed on the JAX default device.
             rng_key: random number generator key
+            extra_fields:
+                Extra fields (e.g. 'accept_prob') to collect during the HMC run.
+                The extra fields are accessible from model.mcmc.get_extra_fields() after model training.
         """
         if hasattr(self, "untrained_deterministic_nn"):
             print("Training deterministic NN...")
@@ -94,5 +98,5 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
                     det_nn.model, det_nn.state.params,
                 self.num_stochastic_layers)[:-1]
             print("Training partially Bayesian NN")
-        super().fit(X, y, num_warmup, num_samples, num_chains, chain_method, progress_bar, device, rng_key)
+        super().fit(X, y, num_warmup, num_samples, num_chains, chain_method, progress_bar, device, rng_key, extra_fields)
 
