@@ -158,7 +158,7 @@ def split_mlp(model, params, n_layers: int = 1, out_dim: int = None):
     return subnet1, subnet1_params, subnet2, subnet2_params
 
 
-def split_mlp_2head(model, params, n_layers: int = 1, out_dim: int = None):
+def split_mlp2head(model, params, n_layers: int = 1, out_dim: int = None):
     """
     Splits MLP2Head and its weights into two sub-networks: one with last n layers
     (+ output heads) removed and another one consisting of those n layers and the output heads.
