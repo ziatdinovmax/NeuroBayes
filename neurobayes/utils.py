@@ -224,3 +224,14 @@ def get_flax_compatible_dict(params_numpyro: Dict[str, jnp.ndarray]) -> Dict[str
     for (k, v1), (_, v2) in zip(weights.items(), biases.items()):
         params_all[k] = {"kernel": v1, "bias": v2}
     return params_all
+
+
+def get_init_vals_dict(nn_params):
+    nn_params_ref = {}
+    for k, layer in nn_params.items():
+        for param_name, param_vals in layer.items():
+            if param_name == 'bias':
+                nn_params_ref['nn/' + k + '.bias'] = param_vals
+            else:
+                nn_params_ref['nn/' + k + '.kernel'] = param_vals
+    return nn_params_ref

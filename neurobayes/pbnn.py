@@ -7,7 +7,7 @@ import numpyro.distributions as dist
 from numpyro.contrib.module import random_flax_module
 
 from .bnn import BNN
-from .utils import split_mlp
+from .utils import split_mlp, get_init_vals_dict
 from .detnn import DeterministicNN
 
 
@@ -39,7 +39,7 @@ class PartialBNN(BNN):
         super().__init__(None, None, noise_prior=noise_prior)
         if deterministic_weights:
             (self.subnet1, self.subnet1_params,
-             self.subnet2) = split_mlp(
+             self.subnet2, self.subnet2_params) = split_mlp(
                  deterministic_nn, deterministic_weights,
                  num_stochastic_layers)[:-1]
         else:
@@ -110,8 +110,9 @@ class PartialBNN(BNN):
                 learning_rate=sgd_lr, swa_epochs=sgd_wa_epochs, sigma=map_sigma)
             det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs, sgd_batch_size)
             (self.subnet1, self.subnet1_params,
-            self.subnet2) = split_mlp(
+            self.subnet2, self.subnet2_params) = split_mlp(
                 det_nn.model, det_nn.state.params,
-                self.num_stochastic_layers)[:-1]
+                self.num_stochastic_layers)
             print("Training partially Bayesian NN")
-        super().fit(X, y, num_warmup, num_samples, num_chains, chain_method, progress_bar, device, rng_key, extra_fields)
+        subnet2_params = get_init_vals_dict(self.subnet2_params)    
+        super().fit(X, y, num_warmup, num_samples, num_chains, chain_method, progress_bar, device, rng_key, extra_fields, subnet2_params)
