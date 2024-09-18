@@ -8,9 +8,8 @@ from numpyro.contrib.module import random_flax_module
 import flax
 
 from .hskbnn import HeteroskedasticBNN
-from .nn import FlaxMLP2Head
 from .detnn import DeterministicNN
-from .utils import put_on_device, split_mlp2head
+from .utils import split_mlp2head, get_init_vals_dict
 
 
 class HeteroskedasticPartialBNN(HeteroskedasticBNN):
@@ -24,8 +23,8 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
         super().__init__(None, None)
         if deterministic_weights:
             (self.subnet1, self.subnet1_params,
-                self.subnet2) = split_mlp2head(
-                    deterministic_nn, deterministic_weights)[:-1]
+                self.subnet2, self.subnet2_params) = split_mlp2head(
+                    deterministic_nn, deterministic_weights)
         else:
             self.untrained_deterministic_nn = deterministic_nn
             self.num_stochastic_layers = num_stochastic_layers
@@ -94,9 +93,10 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
                 learning_rate=sgd_lr, swa_epochs=sgd_wa_epochs, sigma=map_sigma)
             det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs, sgd_batch_size)
             (self.subnet1, self.subnet1_params,
-                self.subnet2) = split_mlp2head(
+                self.subnet2, self.subnet2_params) = split_mlp2head(
                     det_nn.model, det_nn.state.params,
-                self.num_stochastic_layers)[:-1]
+                self.num_stochastic_layers)
             print("Training partially Bayesian NN")
-        super().fit(X, y, num_warmup, num_samples, num_chains, chain_method, progress_bar, device, rng_key, extra_fields)
+        subnet2_params = get_init_vals_dict(self.subnet2_params) 
+        super().fit(X, y, num_warmup, num_samples, num_chains, chain_method, progress_bar, device, rng_key, extra_fields, subnet2_params)
 
