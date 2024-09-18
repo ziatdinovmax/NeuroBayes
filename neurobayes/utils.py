@@ -227,6 +227,8 @@ def get_flax_compatible_dict(params_numpyro: Dict[str, jnp.ndarray]) -> Dict[str
 
 
 def get_init_vals_dict(nn_params):
+    if jax.config.x64_enabled:
+        nn_params = jax.tree_map(promote_to_x64, nn_params)
     nn_params_ref = {}
     for k, layer in nn_params.items():
         for param_name, param_vals in layer.items():
@@ -235,3 +237,7 @@ def get_init_vals_dict(nn_params):
             else:
                 nn_params_ref['nn/' + k + '.kernel'] = param_vals
     return nn_params_ref
+
+
+def promote_to_x64(x):
+    return x.astype(jnp.float64)
