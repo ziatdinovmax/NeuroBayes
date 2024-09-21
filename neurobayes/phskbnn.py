@@ -92,7 +92,7 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
         if hasattr(self, "untrained_deterministic_nn"):
             print("Training deterministic NN...")
             det_nn = DeterministicNN(
-                self.untrained_deterministic_nn, self.input_dim,
+                self.untrained_deterministic_nn, self.input_dim, loss='heteroskedastic',
                 learning_rate=sgd_lr, swa_epochs=sgd_wa_epochs, sigma=map_sigma)
             det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs, sgd_batch_size)
             (self.subnet1, self.subnet1_params,
