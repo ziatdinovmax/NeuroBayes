@@ -12,6 +12,9 @@ from .utils import put_on_device
 
 
 class HeteroskedasticBNN(BNN):
+    """
+    Heteroskedastic Bayesian Neural Net
+    """
 
     def __init__(self,
                  input_dim: int,
@@ -26,7 +29,7 @@ class HeteroskedasticBNN(BNN):
         self.nn = FlaxMLP2Head(hdim, output_dim, activation)
 
     def model(self, X: jnp.ndarray, y: jnp.ndarray = None, **kwargs) -> None:
-        """BNN probabilistic model"""
+        """Heteroskedastic BNN probabilistic model"""
 
         net = random_flax_module(
             "nn", self.nn, input_shape=(1, self.input_dim),

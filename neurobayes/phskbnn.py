@@ -13,6 +13,9 @@ from .utils import split_mlp2head, get_init_vals_dict
 
 
 class HeteroskedasticPartialBNN(HeteroskedasticBNN):
+    """
+    Heteroskedastik Partially Bayesian Neural Network
+    """
 
     def __init__(self,
                  deterministic_nn: Type[flax.linen.Module],
