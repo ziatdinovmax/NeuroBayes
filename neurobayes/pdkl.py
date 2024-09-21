@@ -109,8 +109,8 @@ class PartialDKL(DKL):
             print("Training deterministic NN...")
             X = self.set_data(X)
             det_nn = DeterministicNN(
-                self.untrained_deterministic_nn, self.input_dim, learning_rate=sgd_lr,
-                sgd_batch_size=sgd_batch_size, swa_epochs=sgd_wa_epochs, sigma=map_sigma)
+                self.untrained_deterministic_nn, self.input_dim,
+                learning_rate=sgd_lr, swa_epochs=sgd_wa_epochs, sigma=map_sigma)
             det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs, sgd_batch_size)
             (self.truncated_nn, self.truncated_params,
             self.nn) = split_mlp(
