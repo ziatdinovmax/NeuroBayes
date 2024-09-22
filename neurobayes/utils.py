@@ -84,9 +84,24 @@ def mse(y_pred: jnp.ndarray, y_true: jnp.ndarray) -> jnp.ndarray:
     """
     Calculates the mean squared error between true and predicted values.
     """
-    # Compute the mean squared error
     mse = jnp.mean((y_true - y_pred) ** 2)
     return mse
+
+
+def rmse(y_pred: jnp.ndarray, y_true: jnp.ndarray) -> jnp.ndarray:
+    """
+    Calculates the root mean squared error between true and predicted values.
+    """
+    mse = mse(y_pred, y_true)
+    return jnp.sqrt(mse)
+
+
+def mae(y_pred: jnp.ndarray, y_true: jnp.ndarray) -> jnp.ndarray:
+    """
+    Calculates the mean absolute error between true and predicted values.
+    """
+    mae = jnp.mean(jnp.abs(y_true - y_pred))
+    return mae
 
 
 def nlpd(y: jnp.ndarray, mu: jnp.ndarray, sigma_squared: jnp.ndarray,
@@ -118,3 +133,41 @@ def nlpd(y: jnp.ndarray, mu: jnp.ndarray, sigma_squared: jnp.ndarray,
 
     return nlpd
 
+
+def get_flax_compatible_dict(params_numpyro: Dict[str, jnp.ndarray]) -> Dict[str, Dict[str, jnp.ndarray]]:
+    """
+    Takes a dictionary with MCMC samples produced by numpyro
+    and creates a dictionary with weights and biases compatible
+    with flax .apply() method
+    """
+    params_all = {}
+    weights, biases = {}, {}
+    for key, val in params_numpyro.items():
+        if key.startswith('nn'):
+            layer, param = key.split('/')[-1].split('.')
+            if param == 'bias':
+                biases[layer] = val
+            else:
+                weights[layer] = val
+        else:
+            params_all[key] = val
+    for (k, v1), (_, v2) in zip(weights.items(), biases.items()):
+        params_all[k] = {"kernel": v1, "bias": v2}
+    return params_all
+
+
+def get_init_vals_dict(nn_params):
+    if jax.config.x64_enabled:
+        nn_params = jax.tree_map(promote_to_x64, nn_params)
+    nn_params_ref = {}
+    for k, layer in nn_params.items():
+        for param_name, param_vals in layer.items():
+            if param_name == 'bias':
+                nn_params_ref['nn/' + k + '.bias'] = param_vals
+            else:
+                nn_params_ref['nn/' + k + '.kernel'] = param_vals
+    return nn_params_ref
+
+
+def promote_to_x64(x):
+    return x.astype(jnp.float64)
