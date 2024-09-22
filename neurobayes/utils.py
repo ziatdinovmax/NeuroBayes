@@ -5,7 +5,7 @@ import jax.numpy as jnp
 
 import numpy as np
 
-from .nn import FlaxMLP, FlaxMLP2Head, EmbeddingBackbone
+from .flax_nets import FlaxMLP, FlaxMLP2Head, EmbeddingBackbone
 
 
 def infer_device(device_preference: str = None):

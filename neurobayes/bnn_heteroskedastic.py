@@ -7,7 +7,7 @@ from numpyro.infer import Predictive
 from numpyro.contrib.module import random_flax_module
 
 from .bnn import BNN
-from .nn import FlaxMLP2Head
+from .flax_nets import FlaxMLP2Head
 from .utils import put_on_device
 
 

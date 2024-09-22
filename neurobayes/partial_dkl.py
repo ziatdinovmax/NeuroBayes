@@ -9,7 +9,7 @@ from numpyro.contrib.module import random_flax_module
 from .dkl import DKL
 from .priors import GPPriors
 from .utils import split_mlp
-from .detnn import DeterministicNN
+from .deterministic_nn import DeterministicNN
 
 kernel_fn_type = Callable[[jnp.ndarray, jnp.ndarray, Dict[str, jnp.ndarray], jnp.ndarray],  jnp.ndarray]
 

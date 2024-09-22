@@ -4,12 +4,14 @@ import numpyro
 import numpyro.distributions as dist
 from numpyro.contrib.module import random_flax_module
 
-from .hskbnn import HeteroskedasticBNN
-from .nn import FlaxMLP
+from .bnn_heteroskedastic import HeteroskedasticBNN
+from .flax_nets import FlaxMLP
 
 
-class HeteroskedasticBNN2(HeteroskedasticBNN):
-
+class VarianceModelHeteroskedasticBNN(HeteroskedasticBNN):
+    """
+    Variance model based heteroskedastic Bayesian Neural Net
+    """
     def __init__(self,
                  input_dim: int,
                  output_dim: int,

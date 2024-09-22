@@ -1,56 +1,42 @@
-from typing import Dict, Optional, Type, Tuple
+from typing import List, Optional, Type, Dict, Tuple
+import jax.random as jra
 import jax.numpy as jnp
-import flax
-
 import numpyro
 import numpyro.distributions as dist
+from numpyro.infer import Predictive
 from numpyro.contrib.module import random_flax_module
+import flax
 
-from .bnn import BNN
-from .utils import split_mlp, get_init_vals_dict
-from .detnn import DeterministicNN
+from .bnn_heteroskedastic import HeteroskedasticBNN
+from .deterministic_nn import DeterministicNN
+from .utils import split_mlp2head, get_init_vals_dict
 
 
-class PartialBNN(BNN):
+class HeteroskedasticPartialBNN(HeteroskedasticBNN):
     """
-    Partially stochastic (Bayesian) neural network
-
-    Args:
-        deterministic_nn:
-            Neural network architecture
-            (will be split into determinsitic and stochastic parts)
-        deterministic_weights:
-            Pre-trained deterministic weights, If not provided,
-            the deterministic_nn will be trained from scratch when running .fit() method
-        input_dim:
-            Number of features in the input data
-        num_stochastic_layers:
-            Number of layers at the end of deterministic_nn to be treated as fully stochastic (Bayesian)
-        noise_prior:
-            Custom prior on observational noise distribution
+    Heteroskedastik Partially Bayesian Neural Network
     """
+
     def __init__(self,
                  deterministic_nn: Type[flax.linen.Module],
                  deterministic_weights: Optional[Dict[str, jnp.ndarray]] = None,
                  input_dim: int = None,
-                 num_stochastic_layers: int = 1,
-                 noise_prior: Optional[dist.Distribution] = None
+                 num_stochastic_layers: int = 1
                  ) -> None:
-        super().__init__(None, None, noise_prior=noise_prior)
+        super().__init__(None, None)
         if deterministic_weights:
             (self.subnet1, self.subnet1_params,
-             self.subnet2, self.subnet2_params) = split_mlp(
-                 deterministic_nn, deterministic_weights,
-                 num_stochastic_layers)
+                self.subnet2, self.subnet2_params) = split_mlp2head(
+                    deterministic_nn, deterministic_weights)
         else:
             self.untrained_deterministic_nn = deterministic_nn
             self.num_stochastic_layers = num_stochastic_layers
             if not input_dim:
                 raise ValueError("Please provide input data dimensions or pre-trained model parameters")  
             self.input_dim = input_dim
-    
+
     def model(self, X: jnp.ndarray, y: jnp.ndarray = None, **kwargs) -> None:
-        """Partial BNN model"""
+        """Heteroskedastik (partial) BNN probabilistic model"""
 
         X = self.subnet1.apply({'params': self.subnet1_params}, X)
 
@@ -59,10 +45,10 @@ class PartialBNN(BNN):
             prior=(lambda name, shape: dist.Cauchy() if name == "bias" else dist.Normal()))
 
         # Pass inputs through a NN with the sampled parameters
-        mu = numpyro.deterministic("mu", bnn(X))
-
-        # Sample noise
-        sig = self.sample_noise()
+        mu, sig = bnn(X)
+        # Register values with numpyro
+        mu = numpyro.deterministic("mu", mu)
+        sig = numpyro.deterministic("sig", sig)
 
         # Score against the observed data points
         numpyro.sample("y", dist.Normal(mu, sig), obs=y)
@@ -76,7 +62,7 @@ class PartialBNN(BNN):
             rng_key: Optional[jnp.array] = None, extra_fields: Optional[Tuple[str]] = ()
             ) -> None:
         """
-        Run HMC to infer parameters of the BNN
+        Run HMC to infer parameters of the heteroskedastic BNN
 
         Args:
             X: 2D feature vector
@@ -106,13 +92,14 @@ class PartialBNN(BNN):
         if hasattr(self, "untrained_deterministic_nn"):
             print("Training deterministic NN...")
             det_nn = DeterministicNN(
-                self.untrained_deterministic_nn, self.input_dim,
+                self.untrained_deterministic_nn, self.input_dim, loss='heteroskedastic',
                 learning_rate=sgd_lr, swa_epochs=sgd_wa_epochs, sigma=map_sigma)
             det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs, sgd_batch_size)
             (self.subnet1, self.subnet1_params,
-            self.subnet2, self.subnet2_params) = split_mlp(
-                det_nn.model, det_nn.state.params,
+                self.subnet2, self.subnet2_params) = split_mlp2head(
+                    det_nn.model, det_nn.state.params,
                 self.num_stochastic_layers)
             print("Training partially Bayesian NN")
         subnet2_params = get_init_vals_dict(self.subnet2_params) 
         super().fit(X, y, num_warmup, num_samples, num_chains, chain_method, progress_bar, device, rng_key, extra_fields, subnet2_params)
+
