@@ -7,7 +7,8 @@ import numpyro.distributions as dist
 from numpyro.contrib.module import random_flax_module
 
 from .bnn import BNN
-from .utils import split_mlp, get_init_vals_dict
+from .flax_nets import split_mlp
+from .utils import get_init_vals_dict
 from .deterministic_nn import DeterministicNN
 
 

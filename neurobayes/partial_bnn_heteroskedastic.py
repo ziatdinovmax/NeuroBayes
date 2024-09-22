@@ -9,7 +9,8 @@ import flax
 
 from .bnn_heteroskedastic import HeteroskedasticBNN
 from .deterministic_nn import DeterministicNN
-from .utils import split_mlp2head, get_init_vals_dict
+from .flax_nets import split_mlp2head
+from .utils import get_init_vals_dict
 
 
 class HeteroskedasticPartialBNN(HeteroskedasticBNN):

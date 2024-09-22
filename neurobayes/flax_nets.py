@@ -59,3 +59,50 @@ class FlaxMLP2Head(nn.Module):
         variance = nn.softplus(variance)
 
         return mean, variance
+
+
+def split_mlp(model, params, n_layers: int = 1, out_dim: int = None):
+    """
+    Splits MLP and its weights into two sub-networks: one with last n layers
+    (+ output layer) removed and another one consisting only of those n layers.
+    """
+    out_dim = out_dim if out_dim is not None else model.output_dim  # there will be a mismatch in last_layer_params if out_dim != model.output_dim
+
+    subnet1 = FlaxMLP(model.hidden_dims[:-n_layers], output_dim=0, activation=model.activation)
+    subnet2 = FlaxMLP(model.hidden_dims[-n_layers:], output_dim=out_dim, activation=model.activation)
+
+    subnet1_params = {}
+    subnet2_params = {}
+    for i, (key, val) in enumerate(params.items()):
+        if i < len(model.hidden_dims) - n_layers:
+            subnet1_params[key] = val
+        else:
+            new_key = f"Dense{i - len(model.hidden_dims[:n_layers])}"
+            subnet2_params[new_key] = val
+
+    return subnet1, subnet1_params, subnet2, subnet2_params
+
+
+def split_mlp2head(model, params, n_layers: int = 1, out_dim: int = None):
+    """
+    Splits MLP2Head and its weights into two sub-networks: one with last n layers
+    (+ output heads) removed and another one consisting of those n layers and the output heads.
+    """
+    out_dim = out_dim if out_dim is not None else model.output_dim
+
+    subnet1 = FlaxMLP(model.hidden_dims[:-n_layers], output_dim=0, activation=model.activation)
+    subnet2 = FlaxMLP2Head(model.hidden_dims[-n_layers:], output_dim=out_dim, activation=model.activation)
+
+    subnet1_params = {}
+    subnet2_params = {}
+    
+    for i, (key, val) in enumerate(params.items()):
+        if key in ['MeanHead', 'VarianceHead']:
+            subnet2_params[key] = val
+        elif i < len(model.hidden_dims) - n_layers:
+            subnet1_params[key] = val
+        else:
+            new_key = f"Dense{i - (len(model.hidden_dims) - n_layers)}"
+            subnet2_params[new_key] = val
+
+    return subnet1, subnet1_params, subnet2, subnet2_params

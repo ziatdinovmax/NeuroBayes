@@ -5,8 +5,6 @@ import jax.numpy as jnp
 
 import numpy as np
 
-from .flax_nets import FlaxMLP, FlaxMLP2Head, EmbeddingBackbone
-
 
 def infer_device(device_preference: str = None):
     """
@@ -134,74 +132,6 @@ def nlpd(y: jnp.ndarray, mu: jnp.ndarray, sigma_squared: jnp.ndarray,
     nlpd = -jnp.mean(log_prob)
 
     return nlpd
-
-
-def split_mlp(model, params, n_layers: int = 1, out_dim: int = None):
-    """
-    Splits MLP and its weights into two sub-networks: one with last n layers
-    (+ output layer) removed and another one consisting only of those n layers.
-    """
-    out_dim = out_dim if out_dim is not None else model.output_dim  # there will be a mismatch in last_layer_params if out_dim != model.output_dim
-
-    subnet1 = FlaxMLP(model.hidden_dims[:-n_layers], output_dim=0, activation=model.activation)
-    subnet2 = FlaxMLP(model.hidden_dims[-n_layers:], output_dim=out_dim, activation=model.activation)
-
-    subnet1_params = {}
-    subnet2_params = {}
-    for i, (key, val) in enumerate(params.items()):
-        if i < len(model.hidden_dims) - n_layers:
-            subnet1_params[key] = val
-        else:
-            new_key = f"Dense{i - len(model.hidden_dims[:n_layers])}"
-            subnet2_params[new_key] = val
-
-    return subnet1, subnet1_params, subnet2, subnet2_params
-
-
-def split_mlp2head(model, params, n_layers: int = 1, out_dim: int = None):
-    """
-    Splits MLP2Head and its weights into two sub-networks: one with last n layers
-    (+ output heads) removed and another one consisting of those n layers and the output heads.
-    """
-    out_dim = out_dim if out_dim is not None else model.output_dim
-
-    subnet1 = FlaxMLP(model.hidden_dims[:-n_layers], output_dim=0, activation=model.activation)
-    subnet2 = FlaxMLP2Head(model.hidden_dims[-n_layers:], output_dim=out_dim, activation=model.activation)
-
-    subnet1_params = {}
-    subnet2_params = {}
-    
-    for i, (key, val) in enumerate(params.items()):
-        if key in ['MeanHead', 'VarianceHead']:
-            subnet2_params[key] = val
-        elif i < len(model.hidden_dims) - n_layers:
-            subnet1_params[key] = val
-        else:
-            new_key = f"Dense{i - (len(model.hidden_dims) - n_layers)}"
-            subnet2_params[new_key] = val
-
-    return subnet1, subnet1_params, subnet2, subnet2_params
-
-
-def split_multitask_model(trained_model, params):
-    # Extract the backbone and head components
-    embedding_backbone = EmbeddingBackbone(
-        backbone_dims=trained_model.backbone_dims,
-        num_tasks=trained_model.num_tasks,
-        embedding_dim=trained_model.embedding_dim,
-        activation=trained_model.activation
-    )
-    head = FlaxMLP(
-        hidden_dims=trained_model.head_dims,
-        output_dim=trained_model.output_dim,
-        activation=trained_model.activation
-    )
-
-    # Extract relevant parameters
-    embedding_backbone_params = params['backbone']
-    head_params = params['head']
-
-    return embedding_backbone, embedding_backbone_params, head, head_params
 
 
 def get_flax_compatible_dict(params_numpyro: Dict[str, jnp.ndarray]) -> Dict[str, Dict[str, jnp.ndarray]]:
