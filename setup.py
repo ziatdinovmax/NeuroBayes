@@ -26,7 +26,8 @@ if __name__ == "__main__":
         zip_safe=False,
         install_requires=[
             'jax>=0.4.0',
-            'numpyro>=0.13.0'
+            'numpyro>=0.13.0',
+            'flax>=0.8.4'
         ],
         classifiers=['Programming Language :: Python',
                      'Development Status :: 3 - Alpha',
