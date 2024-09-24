@@ -171,3 +171,12 @@ def get_init_vals_dict(nn_params):
 
 def promote_to_x64(x):
     return x.astype(jnp.float64)
+
+
+def calculate_sigma(X):
+    if X.ndim == 1:
+        X = X[:, None]
+    n_features = X.shape[1]
+    avg_squared_norm = np.mean(np.sum(X**2, axis=1))
+    sigma = np.sqrt(avg_squared_norm / n_features)
+    return sigma
