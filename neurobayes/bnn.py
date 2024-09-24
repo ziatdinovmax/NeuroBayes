@@ -59,7 +59,6 @@ class BNN:
             progress_bar: bool = True, device: str = None,
             rng_key: Optional[jnp.array] = None,
             extra_fields: Optional[Tuple[str]] = (), 
-            init_values: Optional[Dict[str, jnp.ndarray]] = None
             ) -> None:
         """
         Run HMC to infer parameters of the BNN
@@ -83,10 +82,8 @@ class BNN:
         key = rng_key if rng_key is not None else jra.PRNGKey(0)
         X, y = self.set_data(X, y)
         X, y = put_on_device(device, X, y)
-        if init_values is not None:
-            init_strategy = init_to_value(values=init_values)
-        else:
-            init_strategy = init_to_median(num_samples=10)
+        
+        init_strategy = init_to_median(num_samples=10)
         kernel = NUTS(self.model, init_strategy=init_strategy)
         self.mcmc = MCMC(
             kernel,

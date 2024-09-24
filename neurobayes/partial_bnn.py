@@ -40,9 +40,9 @@ class PartialBNN(BNN):
         super().__init__(None, None, noise_prior=noise_prior)
         if deterministic_weights:
             (self.subnet1, self.subnet1_params,
-             self.subnet2, self.subnet2_params) = split_mlp(
+             self.subnet2) = split_mlp(
                  deterministic_nn, deterministic_weights,
-                 num_stochastic_layers)
+                 num_stochastic_layers)[:-1]
         else:
             self.untrained_deterministic_nn = deterministic_nn
             self.num_stochastic_layers = num_stochastic_layers
@@ -111,9 +111,8 @@ class PartialBNN(BNN):
                 learning_rate=sgd_lr, swa_epochs=sgd_wa_epochs, sigma=map_sigma)
             det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs, sgd_batch_size)
             (self.subnet1, self.subnet1_params,
-            self.subnet2, self.subnet2_params) = split_mlp(
+            self.subnet2) = split_mlp(
                 det_nn.model, det_nn.state.params,
-                self.num_stochastic_layers)
+                self.num_stochastic_layers)[:-1]
             print("Training partially Bayesian NN")
-        subnet2_params = get_init_vals_dict(self.subnet2_params) 
-        super().fit(X, y, num_warmup, num_samples, num_chains, chain_method, progress_bar, device, rng_key, extra_fields, subnet2_params)
+        super().fit(X, y, num_warmup, num_samples, num_chains, chain_method, progress_bar, device, rng_key, extra_fields)
