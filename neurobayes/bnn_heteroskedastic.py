@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Dict
 import jax.random as jra
 import jax.numpy as jnp
 import numpyro
@@ -28,12 +28,24 @@ class HeteroskedasticBNN(BNN):
         hdim = hidden_dim if hidden_dim is not None else [32, 16, 8]
         self.nn = FlaxMLP2Head(hdim, output_dim, activation)
 
-    def model(self, X: jnp.ndarray, y: jnp.ndarray = None, **kwargs) -> None:
+    def model(self,
+              X: jnp.ndarray,
+              y: jnp.ndarray = None,
+              pretrained_priors: Dict = None,
+              **kwargs) -> None:
         """Heteroskedastic BNN probabilistic model"""
 
+        def prior(name, shape):
+            if pretrained_priors is not None:
+                param_path = name.split('.')
+                for path in param_path:
+                    mean = pretrained_priors[path]
+                return dist.Normal(mean, 1.0)
+            else:
+                return dist.Normal(0., 1.0)
+
         net = random_flax_module(
-            "nn", self.nn, input_shape=(1, self.input_dim),
-            prior=(lambda name, shape: dist.Cauchy() if name == "bias" else dist.Normal()))
+            "nn", self.nn, input_shape=(1, self.input_dim), prior=prior)
 
         # Pass inputs through a NN with the sampled parameters
         mu, sig = net(X)

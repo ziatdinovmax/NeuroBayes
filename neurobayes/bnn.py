@@ -37,15 +37,18 @@ class BNN:
         self.input_dim = input_dim
         self.noise_prior = noise_prior
 
-    def model(self, X: jnp.ndarray, y: jnp.ndarray = None, pretrained_priors=None, **kwargs) -> None:
+    def model(self,
+              X: jnp.ndarray,
+              y: jnp.ndarray = None,
+              pretrained_priors: Dict = None,
+              **kwargs) -> None:
         """BNN probabilistic model"""
         
         def prior(name, shape):
             if pretrained_priors is not None:
                 param_path = name.split('.')
-                mean = pretrained_priors['params']
                 for path in param_path:
-                    mean = mean[path]
+                    mean = pretrained_priors[path]
                 return dist.Normal(mean, 1.0)
             else:
                 return dist.Normal(0., 1.0)
@@ -65,9 +68,9 @@ class BNN:
     def fit(self, X: jnp.ndarray, y: jnp.ndarray,
             num_warmup: int = 2000, num_samples: int = 2000,
             num_chains: int = 1, chain_method: str = 'sequential',
+            pretrained_priors: Optional[Dict[str, Dict[str, jnp.ndarray]]] = None,
             progress_bar: bool = True, device: str = None,
             rng_key: Optional[jnp.array] = None,
-            pretrained_priors: Optional[Dict[str, Dict[str, jnp.ndarray]]] = None,
             extra_fields: Optional[Tuple[str]] = (),
             ) -> None:
         """

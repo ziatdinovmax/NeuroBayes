@@ -40,9 +40,9 @@ class PartialBNN(BNN):
         super().__init__(None, None, noise_prior=noise_prior)
         if deterministic_weights:
             (self.subnet1, self.subnet1_params,
-             self.subnet2) = split_mlp(
+             self.subnet2, self.subnet2_params) = split_mlp(
                  deterministic_nn, deterministic_weights,
-                 num_stochastic_layers)[:-1]
+                 num_stochastic_layers)
         else:
             self.untrained_deterministic_nn = deterministic_nn
             self.num_stochastic_layers = num_stochastic_layers
@@ -56,9 +56,8 @@ class PartialBNN(BNN):
         def prior(name, shape):
             if pretrained_priors is not None:
                 param_path = name.split('.')
-                mean = pretrained_priors
                 for path in param_path:
-                    mean = mean[path]
+                    mean = pretrained_priors[path]
                 return dist.Normal(mean, 1.0)
             else:
                 return dist.Normal(0., 1.0)
@@ -84,8 +83,9 @@ class PartialBNN(BNN):
             num_chains: int = 1, chain_method: str = 'sequential',
             sgd_epochs: Optional[int] = None, sgd_lr: Optional[float] = 0.01,
             sgd_batch_size: Optional[int] = None, sgd_wa_epochs: Optional[int] = 10,
-            map_sigma: float = 1.0, progress_bar: bool = True, device: str = None,
-            rng_key: Optional[jnp.array] = None, map_priors: bool = False,
+            map_sigma: float = 1.0, map_priors: bool = False,
+            progress_bar: bool = True, device: str = None,
+            rng_key: Optional[jnp.array] = None,
             extra_fields: Optional[Tuple[str]] = ()
             ) -> None:
         """
@@ -107,6 +107,7 @@ class PartialBNN(BNN):
                 Defaults to None, meaning that an entire dataset is passed through an NN.
             sgd_wa_epochs: Number of epochs for stochastic weight averaging at the end of SGD training trajectory (defautls to 10)
             map_sigma: sigma in gaussian prior for regularized SGD training
+            map_priors: use MAP values to initialize BNN weight priors (Defaults to False)
             progress_bar: show progress bar
             device:
                 The device (e.g. "cpu" or "gpu") perform computation on ('cpu', 'gpu'). If None, computation
@@ -128,5 +129,6 @@ class PartialBNN(BNN):
                 self.num_stochastic_layers)
             print("Training partially Bayesian NN")
         super().fit(
-            X, y, num_warmup, num_samples, num_chains, chain_method, progress_bar, device,
-            rng_key, self.subnet2_params if map_priors else None, extra_fields)
+            X, y, num_warmup, num_samples, num_chains, chain_method,
+            self.subnet2_params if map_priors else None, progress_bar,
+            device, rng_key, extra_fields)
