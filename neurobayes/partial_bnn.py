@@ -56,8 +56,9 @@ class PartialBNN(BNN):
         def prior(name, shape):
             if pretrained_priors is not None:
                 param_path = name.split('.')
+                mean = pretrained_priors
                 for path in param_path:
-                    mean = pretrained_priors[path]
+                    mean = mean[path]
                 return dist.Normal(mean, 1.0)
             else:
                 return dist.Normal(0., 1.0)
