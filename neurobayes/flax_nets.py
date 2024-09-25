@@ -77,7 +77,8 @@ def split_mlp(model, params, n_layers: int = 1, out_dim: int = None):
         if i < len(model.hidden_dims) - n_layers:
             subnet1_params[key] = val
         else:
-            new_key = f"Dense{i}"
+            #new_key = f"Dense{i}"
+            new_key = f"Dense{i - (len(model.hidden_dims) - n_layers)}"
             subnet2_params[new_key] = val
 
     return subnet1, subnet1_params, subnet2, subnet2_params
@@ -102,7 +103,8 @@ def split_mlp2head(model, params, n_layers: int = 1, out_dim: int = None):
         elif i < len(model.hidden_dims) - n_layers:
             subnet1_params[key] = val
         else:
-            new_key = f"Dense{i}"
+            #new_key = f"Dense{i}"
+            new_key = f"Dense{i - (len(model.hidden_dims) - n_layers)}"
             subnet2_params[new_key] = val
 
     return subnet1, subnet1_params, subnet2, subnet2_params
