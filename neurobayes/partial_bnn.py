@@ -8,7 +8,6 @@ from numpyro.contrib.module import random_flax_module
 
 from .bnn import BNN
 from .flax_nets import split_mlp
-from .utils import get_init_vals_dict
 from .deterministic_nn import DeterministicNN
 
 

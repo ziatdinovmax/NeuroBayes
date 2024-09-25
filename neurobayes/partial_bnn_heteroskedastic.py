@@ -1,16 +1,13 @@
 from typing import List, Optional, Type, Dict, Tuple
-import jax.random as jra
 import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
-from numpyro.infer import Predictive
 from numpyro.contrib.module import random_flax_module
 import flax
 
 from .bnn_heteroskedastic import HeteroskedasticBNN
 from .deterministic_nn import DeterministicNN
 from .flax_nets import split_mlp2head
-from .utils import get_init_vals_dict
 
 
 class HeteroskedasticPartialBNN(HeteroskedasticBNN):

@@ -1,10 +1,11 @@
 from typing import Dict, Tuple, Optional, Union, List
+import jax
 import jax.random as jra
 import jax.numpy as jnp
 
 import numpyro
 import numpyro.distributions as dist
-from numpyro.infer import MCMC, NUTS, init_to_median, init_to_value, Predictive
+from numpyro.infer import MCMC, NUTS, init_to_median, Predictive
 from numpyro.contrib.module import random_flax_module
 
 from .flax_nets import FlaxMLP
@@ -173,7 +174,6 @@ class BNN:
 
     # def predict_in_batches(self, X_new: jnp.ndarray,
     #                        batch_size: int = 100,
-    #                        n_draws: int = 1,
     #                        device: Optional[str] = None,
     #                        rng_key: Optional[jnp.ndarray] = None
     #                        ) -> Tuple[jnp.ndarray, jnp.ndarray]:
@@ -181,18 +181,24 @@ class BNN:
     #     Make prediction in batches (to avoid memory overflow)
     #     at X_new points a trained BNN model
     #     """
+    #     X_new = self.set_data(X_new)
+    #     if rng_key is None:
+    #         rng_key = jra.PRNGKey(0)
     #     samples = self.get_samples(chain_dim=False)
-    #     mean_chunks, f_samples_chunks = [], []
+    #     X_new, samples = put_on_device(device, X_new, samples)
+    #     mu_chunks, y_chunks = [], []
     #     for batch in split_dict(samples, batch_size):
-    #         mean_i, f_samples_i = self._vmap_predict(X_new, batch, n_draws, rng_key, device)
-    #         mean_i = jax.device_put(mean_i, jax.devices("cpu")[0])
-    #         f_samples_i = jax.device_put(f_samples_i, jax.devices("cpu")[0])
-    #         mean_chunks.append(mean_i[None])
-    #         f_samples_chunks.append(f_samples_i)
-    #     mean_chunks = jnp.concatenate(mean_chunks, axis=0)
-    #     f_samples_chunks = jnp.concatenate(f_samples_chunks)
+    #         predictions = self.sample_from_posterior(
+    #             rng_key, X_new, batch, return_sites=['mu', 'y']).values()
+    #         mu_i, y_i = predictions["mu"], predictions["y"]
+    #         mu_i = jax.device_put(mu_i, jax.devices("cpu")[0])
+    #         y_i = jax.device_put(y_i, jax.devices("cpu")[0])
+    #         mu_chunks.append(mu_i)
+    #         y_chunks.append(y_i)
+    #     mu_chunks = jnp.concatenate(mu_chunks, axis=0)
+    #     y_chunks = jnp.concatenate(y_chunks, axis=0)
         
-    #     return mean_chunks.mean(0), f_samples_chunks.var(0)
+    #     return mu_chunks.mean(0), y_chunks.var(0)
 
     def set_data(self, X: jnp.ndarray, y: Optional[jnp.ndarray] = None
                  ) -> Union[Tuple[jnp.ndarray], jnp.ndarray]:
