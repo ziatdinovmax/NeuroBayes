@@ -37,12 +37,21 @@ class BNN:
         self.input_dim = input_dim
         self.noise_prior = noise_prior
 
-    def model(self, X: jnp.ndarray, y: jnp.ndarray = None, **kwargs) -> None:
+    def model(self, X: jnp.ndarray, y: jnp.ndarray = None, pretrained_priors=None, **kwargs) -> None:
         """BNN probabilistic model"""
-
+        
+        def prior(name, shape):
+            if pretrained_priors is not None:
+                param_path = name.split('.')
+                mean = pretrained_priors['params']
+                for path in param_path:
+                    mean = mean[path]
+                return dist.Normal(mean, 1.0)
+            else:
+                return dist.Normal(0., 1.0)
+            
         net = random_flax_module(
-            "nn", self.nn, input_shape=(1, self.input_dim),
-            prior=(lambda name, shape: dist.Cauchy() if name == "bias" else dist.Normal()))
+            "nn", self.nn, input_shape=(1, self.input_dim), prior=prior)
 
         # Pass inputs through a NN with the sampled parameters
         mu = numpyro.deterministic("mu", net(X))
@@ -58,7 +67,8 @@ class BNN:
             num_chains: int = 1, chain_method: str = 'sequential',
             progress_bar: bool = True, device: str = None,
             rng_key: Optional[jnp.array] = None,
-            extra_fields: Optional[Tuple[str]] = (), 
+            pretrained_priors: Optional[Dict[str, Dict[str, jnp.ndarray]]] = None,
+            extra_fields: Optional[Tuple[str]] = (),
             ) -> None:
         """
         Run HMC to infer parameters of the BNN
@@ -75,6 +85,7 @@ class BNN:
                 The device (e.g. "cpu" or "gpu") perform computation on ('cpu', 'gpu'). If None, computation
                 is performed on the JAX default device.
             rng_key: random number generator key
+            pretrained_priors: Dictionary with mean values for Normal prior distributions over model weights and biases
             extra_fields:
                 Extra fields (e.g. 'accept_prob') to collect during the HMC run.
                 The extra fields are accessible from model.mcmc.get_extra_fields() after model training.
@@ -94,7 +105,7 @@ class BNN:
             progress_bar=progress_bar,
             jit_model_args=False
         )
-        self.mcmc.run(key, X, y, extra_fields=extra_fields)
+        self.mcmc.run(key, X, y, pretrained_priors, extra_fields=extra_fields)
 
     def get_samples(self, chain_dim: bool = False) -> Dict[str, jnp.ndarray]:
         """Get posterior samples (after running the MCMC chains)"""
