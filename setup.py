@@ -25,7 +25,8 @@ if __name__ == "__main__":
         packages=find_packages(),
         zip_safe=False,
         install_requires=[
-            'jax>=0.4.0',
+            'jax>=0.4.0,<=0.4.31',
+            'jaxlib>=0.4.0,<=0.4.31',
             'numpyro>=0.13.0',
             'flax>=0.8.4'
         ],
