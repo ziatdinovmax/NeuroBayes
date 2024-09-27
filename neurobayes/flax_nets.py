@@ -67,8 +67,13 @@ def split_mlp(model, params, n_layers: int = 1, out_dim: int = None):
     """
     out_dim = out_dim if out_dim is not None else model.output_dim  # there will be a mismatch in last_layer_params if out_dim != model.output_dim
 
-    subnet1 = FlaxMLP(model.hidden_dims[:-n_layers], output_dim=0, activation=model.activation)
-    subnet2 = FlaxMLP(model.hidden_dims[-n_layers:], output_dim=out_dim, activation=model.activation)
+
+    subnet1 = FlaxMLP(
+        model.hidden_dims[:-n_layers] if n_layers > 0 else model.hidden_dims,
+        output_dim=0, activation=model.activation)
+    subnet2 = FlaxMLP(
+        model.hidden_dims[-n_layers:] if n_layers > 0 else [],
+        output_dim=out_dim, activation=model.activation)
 
     subnet1_params = {}
     subnet2_params = {}
