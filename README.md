@@ -61,7 +61,7 @@ for step in range(exploration_steps):
     X_measured = np.append(X_measured, X_next[None])
     y_measured = np.append(y_measured, y_next)
 ```
-See full active learning example [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/example1d.ipynb).
+See full active learning example [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/bnn_example1d.ipynb).
     
 ### Partially Bayesian Neural Nets
 PBNNs follow a similar approach, with the key difference being that a deterministic model must first be defined, along with the specification of stochastic gradient descent parameters. By default, PBNNs are trained using Maximum A Posteriori approximation, with stochastic weight averaging applied at the end of each training trajectory. This allows PBNNs to balance computational efficiency with uncertainty quantification by only treating a subset of neurons probabilistically.
@@ -90,5 +90,7 @@ for step in range(exploration_steps):
     X_measured = np.append(X_measured, X_next[None])
     y_measured = np.append(y_measured, y_next)
 ```
+See full active learning example [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/pbnn_example1d.ipynb).
+
 
 
