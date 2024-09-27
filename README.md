@@ -2,7 +2,7 @@
 
 ## What is it for
 
-Active learning optimizes the exploration of large parameter spaces by strategically selecting which experiments or simulations to conduct, thus reducing resource consumption and potentially accelerating scientific discovery. A key component of this approach is a probabilistic surrogate model, typically a Gaussian Process (GP), which approximates an unknown functional relationship between control parameters and a target property. However, conventional GPs often struggle when applied to systems with discontinuities and non-stationarities, prompting the exploration of alternative models. This limitation becomes particularly relevant in physical science problems, which are often characterized by abrupt transitions between different system states and rapid changes in physical property behavior. Fully Bayesian Neural Networks (FBNNs) serve as a promising substitute, treating all neural network weights probabilistically and leveraging advanced Markov Chain Monte Carlo techniques for direct sampling from the posterior distribution. This approach enables FBNNs to provide reliable predictive distributions, crucial for making informed decisions under uncertainty in the active learning setting. Although traditionally considered too computationally expensive for 'big data' applications, many physical sciences problems involve small amounts of data in relatively low-dimensional parameter spaces, making application of FBNNS feasible. Furthermore, for cases where the parameter space becomes more complex, Partially Bayesian Neural Networks (PBNNs) can be used, where only a subset of neurons is Bayesian while the remainder are deterministic. This repository is designed to assess the suitability and performance of FBNNs and PBNNs with the No-U-Turn Sampler for active learning tasks in the small and intermediate data regime, highlighting their potential to enhance predictive accuracy and reliability on test functions relevant to problems in physical sciences.
+Active learning optimizes the exploration of large parameter spaces by strategically selecting experiments or simulations, reducing resource use and accelerating discovery. A crucial element is a probabilistic surrogate model, typically a Gaussian Process (GP), which approximates the relationship between control parameters and a target property. However, GPs struggle with systems featuring discontinuities and non-stationarities, common in physical science problems. Fully Bayesian Neural Networks (FBNNs) offer a promising alternative by treating all network weights probabilistically and using advanced Markov Chain Monte Carlo techniques for for direct sampling from the posterior distribution. This approach provides reliable predictive distributions, crucial for decision-making under uncertainty. Although FBNNs are traditionally seen as computationally expensive for big data, many physical science problems involve small data sets, making FBNNs feasible. For more complex parameter spaces, Partially Bayesian Neural Networks (PBNNs) can be used, where only some neurons are Bayesian. This repository enables the use of FBNNs and PBNNs with the No-U-Turn Sampler in active and transfer learning tasks for small and intermediate data volumes, demonstrating their potential in physical science applications.
 
 ## How to use
 ### Fully Bayesian Neural Nets
@@ -61,7 +61,7 @@ for step in range(exploration_steps):
     X_measured = np.append(X_measured, X_next[None])
     y_measured = np.append(y_measured, y_next)
 ```
-See full active learning example [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/example1d.ipynb).
+See full active learning example [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/bnn_example1d.ipynb).
     
 ### Partially Bayesian Neural Nets
 PBNNs follow a similar approach, with the key difference being that a deterministic model must first be defined, along with the specification of stochastic gradient descent parameters. By default, PBNNs are trained using Maximum A Posteriori approximation, with stochastic weight averaging applied at the end of each training trajectory. This allows PBNNs to balance computational efficiency with uncertainty quantification by only treating a subset of neurons probabilistically.
@@ -90,5 +90,7 @@ for step in range(exploration_steps):
     X_measured = np.append(X_measured, X_next[None])
     y_measured = np.append(y_measured, y_next)
 ```
+See full active learning example [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/pbnn_example1d.ipynb).
+
 
 
