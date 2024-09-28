@@ -1,6 +1,8 @@
 # NeuroBayes
 
 ## What is it for
+![actove_learning](https://github.com/user-attachments/assets/203fb3ab-cfbe-4882-9cab-ec8269359110)
+
 
 Active learning optimizes the exploration of large parameter spaces by strategically selecting experiments or simulations, reducing resource use and accelerating discovery. A crucial element is a probabilistic surrogate model, typically a Gaussian Process (GP), which approximates the relationship between control parameters and a target property. However, GPs struggle with systems featuring discontinuities and non-stationarities, common in physical science problems. Fully Bayesian Neural Networks (FBNNs) offer a promising alternative by treating all network weights probabilistically and using advanced Markov Chain Monte Carlo techniques for for direct sampling from the posterior distribution. This approach provides reliable predictive distributions, crucial for decision-making under uncertainty. Although FBNNs are traditionally seen as computationally expensive for big data, many physical science problems involve small data sets, making FBNNs feasible. For more complex parameter spaces, Partially Bayesian Neural Networks (PBNNs) can be used, where only some neurons are Bayesian. This repository enables the use of FBNNs and PBNNs with the No-U-Turn Sampler in active and transfer learning tasks for small and intermediate data volumes, demonstrating their potential in physical science applications.
 
@@ -22,16 +24,6 @@ measure = lambda x: fn(x) + np.random.normal(0, 0.02, size=len(x))
 # Generate initial dataset
 X_measured = np.random.uniform(x_start, x_stop, 50)
 y_measured = measure(X_measured)
-```
-
-Run a single shot Gaussian process
-```python3
-# Initialize model
-model = GP(input_dim=1, kernel=nb.kernels.MaternKernel)
-# Train model
-model.fit(X_measured, y_measured, num_warmup=1000, num_samples=1000)
-# Make a prediction on full domain
-posterior_mean, posterior_var = model.predict(X_domain)
 ```
 
 Run a single shot Bayesian neural network
@@ -90,7 +82,7 @@ for step in range(exploration_steps):
     X_measured = np.append(X_measured, X_next[None])
     y_measured = np.append(y_measured, y_next)
 ```
-See full active learning example [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/pbnn_example1d.ipynb).
+See full example [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/pbnn_example1d.ipynb).
 
 ### Other applications
 #### Heteroskedastic noise
