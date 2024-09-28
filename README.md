@@ -92,7 +92,7 @@ for step in range(exploration_steps):
 ```
 See full active learning example [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/pbnn_example1d.ipynb).
 
-### Other applciations
+### Other applications
 #### Heteroskedastic noise
 By default, we assume constant observation noise across all inputs. However, this assumption often doesn't hold in real-world datasets which may exhibit input-dependent levels of noise. NeuroBayes offers heteroskedastic BNNs that can capture varying levels of noise in different regions of the data, allowing for more accurate uncertainty quantification.
 
@@ -120,3 +120,40 @@ model.fit(X_measured, y_measured, sgd_epochs=5000, sgd_lr=5e-3, num_warmup=1000,
 posterior_mean, posterior_var = model.predict(X_domain)
 ```
 
+#### Pre-trained priors
+NeuroBayes extends the concept of partial BNNs to leverage pre-existing knowledge or simulations, allowing for more informed priors in Bayesian Neural Networks. This approach is particularly useful when you have theoretical models or simulations that can guide the learning process for experimental data.
+The process involves two main steps:
+
+Pre-training a deterministic neural network on theoretical or simulated data.
+Using the weights from this pre-trained network to center the prior distributions for a Fully Bayesian Neural Network (FBNN) or Partially Bayesian Neural Network (PBNN).
+
+Here's how to implement this approach:
+First, fit a deterministic NN to theoretical data:
+```python3
+import neurobayes as nb
+from neurobayes.flax_nets import FlaxMLP
+
+hidden_dims = [64, 32, 16, 8]
+net = FlaxMLP(hidden_dims=hidden_dims, output_dim=1)
+detnn = nb.DeterministicNN(net, input_dim=1, learning_rate=5e-3, map=True, sigma=nb.utils.calculate_sigma(X1))
+detnn.train(X1, y1, epochs=5000, batch_size=None)
+```
+
+Note: In practice, you should use proper train-test-validation splits for robust model development.
+
+Next, train a BNN on experimental data, using the pre-trained weights to set theory-informed BNN priors:
+
+```python3
+model = nb.BNN(input_dim=1, output_dim=1, hidden_dim=hidden_dims)
+model.fit(
+    X2, y2, num_warmup=1000, num_samples=1000, num_chains=1,
+    pretrained_priors=detnn.state.params  # use trained weights to set priors for BNN
+)
+```
+
+Make a prediction as ususal
+```python3
+posterior_mean, posterior_var = model.predict(X_test)
+```
+
+This approach allows you to incorporate domain knowledge or theoretical models into your Bayesian Neural Network, potentially leading to better generalization and more accurate uncertainty estimates, especially in cases where experimental data is limited.
