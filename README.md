@@ -92,5 +92,31 @@ for step in range(exploration_steps):
 ```
 See full active learning example [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/pbnn_example1d.ipynb).
 
+### Other applciations
+#### Heteroskedastic noise
+By default, we assume constant observation noise across all inputs. However, this assumption often doesn't hold in real-world datasets which may exhibit input-dependent levels of noise. NeuroBayes offers heteroskedastic BNNs that can capture varying levels of noise in different regions of the data, allowing for more accurate uncertainty quantification.
 
+The usage of a heteroskedastic BNN is straightforward and follows the same pattern as the standard BNN models:
+
+For fully Bayesian heteroskedastic BNN:
+```python3
+# Initialize HeteroskedasticBNN model
+model = HeteroskedasticBNN(input_dim=1, output_dim=1)
+# Train
+model.fit(X_measured, y_measured, num_warmup=2000, num_samples=2000)
+# Make a prediction
+posterior_mean, posterior_var = model.predict(X_domain)
+```
+
+For partially Bayesian heteroskedastic BNN:
+```python3
+# Initialize model architecture
+hidden_dims = [64, 32, 16, 8, 8]
+net = FlaxMLP2Head(hidden_dims, 1)
+# Pass it to HeteroskedasticPartialBNN module and perform training
+model = HeteroskedasticPartialBNN(net, input_dim=1, num_stochastic_layers=2)
+model.fit(X_measured, y_measured, sgd_epochs=5000, sgd_lr=5e-3, num_warmup=1000, num_samples=1000)
+# Make a prediction
+posterior_mean, posterior_var = model.predict(X_domain)
+```
 
