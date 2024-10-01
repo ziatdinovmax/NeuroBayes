@@ -112,3 +112,40 @@ def split_mlp2head(model, params, n_layers: int = 1, out_dim: int = None):
             subnet2_params[new_key] = val
 
     return subnet1, subnet1_params, subnet2, subnet2_params
+
+
+class FlaxConvNet(nn.Module):
+    # Define the structure of the network
+    conv_layers: Sequence[int]  # List of number of filters for each conv layer
+    fc_layers: Sequence[int]    # List of hidden layer sizes for fully connected layers
+    output_dim: int             # Number of units in the output layer
+    activation: str = 'relu'    # Type of activation function, default is 'relu'
+
+    @nn.compact
+    def __call__(self, x: jnp.ndarray, train: bool = True) -> jnp.ndarray:
+        """
+        Forward pass of the ConvNet.
+        """
+        # Set the activation function based on the input parameter
+        activation_fn = nn.tanh if self.activation == 'tanh' else nn.silu
+
+        # Convolutional layers
+        for i, filters in enumerate(self.conv_layers):
+            x = nn.Conv(features=filters, kernel_size=(3, 3), padding='SAME', name=f"Conv{i}")(x)
+            x = activation_fn(x)
+            x = nn.max_pool(x, window_shape=(2, 2), strides=(2, 2))
+
+        # Flatten the output for the fully connected layers
+        x = x.reshape((x.shape[0], -1))
+
+        # Fully connected layers
+        for i, hidden_dim in enumerate(self.fc_layers):
+            x = nn.Dense(features=hidden_dim, name=f"Dense{i}")(x)
+            x = activation_fn(x)
+            x = nn.Dropout(rate=0.5, deterministic=not train)(x)
+
+        # Output layer, no activation function applied here
+        if self.output_dim:
+            x = nn.Dense(features=self.output_dim, name=f"Dense{len(self.fc_layers)}")(x)
+
+        return x
