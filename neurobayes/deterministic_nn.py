@@ -141,3 +141,6 @@ class DeterministicNN:
             *self.params_history
         )
         return avg_params
+    
+    def get_params(self) -> Dict:
+        return self.state.params
