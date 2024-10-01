@@ -142,7 +142,6 @@ class FlaxConvNet(nn.Module):
         for i, hidden_dim in enumerate(self.fc_layers):
             x = nn.Dense(features=hidden_dim, name=f"Dense{i}")(x)
             x = activation_fn(x)
-            x = nn.Dropout(rate=0.5, deterministic=not train)(x)
 
         # Output layer, no activation function applied here
         if self.output_dim:
