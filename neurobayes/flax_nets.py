@@ -1,4 +1,4 @@
-from typing import Sequence, Tuple
+from typing import Sequence, Tuple, Union, Dict, Callable
 import jax.numpy as jnp
 import flax.linen as nn
 
@@ -112,3 +112,75 @@ def split_mlp2head(model, params, n_layers: int = 1, out_dim: int = None):
             subnet2_params[new_key] = val
 
     return subnet1, subnet1_params, subnet2, subnet2_params
+
+
+class FlaxConvNet(nn.Module):
+    # Define the structure of the network
+    input_dim: int
+    conv_layers: Sequence[int]  # List of number of filters for each conv layer
+    fc_layers: Sequence[int]    # List of hidden layer sizes for fully connected layers
+    output_dim: int             # Number of units in the output layer
+    activation: str = 'tanh'    # Type of activation function, default is 'tanh'
+    kernel_size: Union[int, Tuple[int, ...]] = 3  # Kernel size for conv layers
+
+    @nn.compact
+    def __call__(self, x: jnp.ndarray, train: bool = True) -> jnp.ndarray:
+        """
+        Forward pass of the ConvNet.
+        """
+        # Set the activation function based on the input parameter
+        activation_fn = nn.tanh if self.activation == 'tanh' else nn.silu
+
+        conv, pool = get_conv_and_pool_ops(self.input_dim, self.kernel_size)
+
+        # Convolutional layers
+        for i, filters in enumerate(self.conv_layers):
+            x = conv(features=filters, name=f"Conv{i}")(x)
+            x = activation_fn(x)
+            x = pool(x)
+
+        # Flatten the output for the fully connected layers
+        x = x.reshape((x.shape[0], -1))
+
+        # Fully connected layers
+        for i, hidden_dim in enumerate(self.fc_layers):
+            x = nn.Dense(features=hidden_dim, name=f"Dense{i}")(x)
+            x = activation_fn(x)
+
+        # Output layer, no activation function applied here
+        if self.output_dim:
+            x = nn.Dense(features=self.output_dim, name=f"Dense{len(self.fc_layers)}")(x)
+
+        return x
+    
+
+def get_conv_and_pool_ops(input_dim: int, kernel_size: Union[int, Tuple[int, ...]]) -> Tuple[Callable, Callable]:
+    """
+    Returns appropriate convolution and pooling operations based on input dimension.
+    
+    Args:
+    input_dim (int): Dimension of input data (1, 2, or 3)
+    kernel_size (int or tuple): Size of the convolution kernel
+    
+    Returns:
+    tuple: (conv_op, pool_op) - Convolution and pooling operations
+    """
+    ops: Dict[int, Tuple[Callable, Callable]] = {
+        1: (
+            lambda *args, **kwargs: nn.Conv(*args, **kwargs, kernel_size=(kernel_size,), padding='SAME'),
+            lambda x: nn.max_pool(x, window_shape=(2,), strides=(2,))
+        ),
+        2: (
+            lambda *args, **kwargs: nn.Conv(*args, **kwargs, kernel_size=(kernel_size, kernel_size), padding='SAME'),
+            lambda x: nn.max_pool(x, window_shape=(2, 2), strides=(2, 2))
+        ),
+        3: (
+            lambda *args, **kwargs: nn.Conv(*args, **kwargs, kernel_size=(kernel_size, kernel_size, kernel_size), padding='SAME'),
+            lambda x: nn.max_pool(x, window_shape=(2, 2, 2), strides=(2, 2, 2))
+        )
+    }
+    
+    if input_dim not in ops:
+        raise ValueError(f"Unsupported input dimension: {input_dim}")
+    
+    return ops[input_dim]
