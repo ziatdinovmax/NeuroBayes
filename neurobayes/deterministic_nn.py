@@ -96,7 +96,7 @@ class DeterministicNN:
         y_batches = split_in_batches(y_train, batch_size)
         num_batches = len(X_batches)
         
-        with tqdm(total=epochs, desc="Training Progress", leave=True) as pbar:  # Progress bar tracks epochs now
+        with tqdm(total=epochs, desc="Training Progress", leave=True, disable=None) as pbar:  # Progress bar tracks epochs now, but only with TTY
             for epoch in range(epochs):
                 epoch_loss = 0.0
                 for i, (X_batch, y_batch) in enumerate(zip(X_batches, y_batches)):
