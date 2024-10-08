@@ -29,7 +29,7 @@ class DMFGP(GP):
     def model(self, X: jnp.ndarray, y: jnp.ndarray = None) -> None:
         """DMFGP model with inputs X and targets y"""
         # Deep mean function
-        f_loc = self.nn.apply({'params': self.nn_weights}, X)
+        f_loc = self.nn.apply({'params': self.nn_weights}, X).squeeze()
         # Sample kernel parameters
         kernel_params = self.sample_kernel_params()
         # Sample observational noise variance
@@ -93,7 +93,7 @@ class DMFGP(GP):
         if not self.nn_weights:
             print("Training deterministic NN...")
             det_nn = DeterministicNN(
-                self.nn, self.input_dim,
+                self.nn, self.kernel_dim,
                 learning_rate=sgd_lr, swa_epochs=sgd_wa_epochs, sigma=map_sigma)
             det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs, sgd_batch_size)
             self.nn_weights = det_nn.state.params
@@ -119,7 +119,7 @@ class DMFGP(GP):
         k_pX = self.kernel(X_new, X_train, params)
         # compute predictive mean covariance
         K_xx_inv = jnp.linalg.inv(k_XX)
-        mean = jnp.matmul(k_pX, jnp.matmul(K_xx_inv, y_train))
+        mean = jnp.matmul(k_pX, jnp.matmul(K_xx_inv, y_residual))
         cov = k_pp - jnp.matmul(k_pX, jnp.matmul(K_xx_inv, jnp.transpose(k_pX)))
         # Apply deep mean function
         mean += self.nn.apply({'params': self.nn_weights}, X_new).squeeze()
