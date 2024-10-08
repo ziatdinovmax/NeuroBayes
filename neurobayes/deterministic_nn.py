@@ -38,13 +38,14 @@ class DeterministicNN:
                  sigma: float = 1.0,
                  swa_epochs: int = 10) -> None:
         
+        input_dim = (input_dim,) if isinstance(input_dim, int) else input_dim
         self.model = architecture
 
         if loss not in ['homoskedastic', 'heteroskedastic']:
             raise ValueError("Select between 'homoskedastic' or 'heteroskedastic' loss")
         self.loss = loss
         key = jax.random.PRNGKey(0)
-        params = self.model.init(key, jnp.ones((1, input_dim)))['params']
+        params = self.model.init(key, jnp.ones((1, *input_dim)))['params']
         self.state = TrainState.create(
             apply_fn=self.model.apply,
             params=params,
