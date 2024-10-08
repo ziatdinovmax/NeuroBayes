@@ -1,5 +1,6 @@
 from .gp import GP
 from .vigp import VIGP
+from .dmfgp import DMFGP
 from .dkl import DKL
 from .vidkl import VIDKL
 from .bnn import BNN
@@ -18,6 +19,7 @@ from . import genfunc
 __all__ = [
     "GP",
     "VIGP",
+    "DMFGP",
     "DKL",
     "VIDKL",
     "BNN",
