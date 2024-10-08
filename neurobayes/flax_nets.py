@@ -1,4 +1,4 @@
-from typing import Sequence, Tuple, Union, Callable, Dict
+from typing import Sequence, Tuple, Union, Callable, Dict, Any
 import jax.numpy as jnp
 import flax.linen as nn
 
@@ -159,11 +159,11 @@ def get_conv_and_pool_ops(input_dim: int, kernel_size: Union[int, Tuple[int, ...
     Returns appropriate convolution and pooling operations based on input dimension.
     
     Args:
-    input_dim (int): Dimension of input data (1, 2, or 3)
-    kernel_size (int or tuple): Size of the convolution kernel
+        input_dim (int): Dimension of input data (1, 2, or 3)
+        kernel_size (int or tuple): Size of the convolution kernel
     
     Returns:
-    tuple: (conv_op, pool_op) - Convolution and pooling operations
+        tuple: (conv_op, pool_op) - Convolution and pooling operations
     """
     ops: Dict[int, Tuple[Callable, Callable]] = {
         1: (
@@ -184,3 +184,41 @@ def get_conv_and_pool_ops(input_dim: int, kernel_size: Union[int, Tuple[int, ...
         raise ValueError(f"Unsupported input dimension: {input_dim}")
     
     return ops[input_dim]
+
+
+def split_convnet(model: FlaxConvNet, params: Dict[str, Any]):
+    """
+    Splits ConvNet and its weights into two parts: convolutional layers and MLP (fully connected layers).
+    
+    Args:
+        model (FlaxConvNet): The original model to split
+        params (dict): The parameters of the original model
+    
+    Returns:
+        tuple: (conv_model, conv_params, mlp_model, mlp_params)
+    """
+    conv_model = FlaxConvNet(
+        input_dim=model.input_dim,
+        conv_layers=model.conv_layers,
+        fc_layers=[],
+        output_dim=0,
+        activation=model.activation,
+        kernel_size=model.kernel_size
+    )
+    
+    mlp_model = FlaxMLP(
+        hidden_dims=model.fc_layers,
+        output_dim=model.output_dim,
+        activation=model.activation
+    )
+
+    conv_params = {}
+    mlp_params = {}
+    
+    for key, val in params.items():
+        if key.startswith('Conv'):
+            conv_params[key] = val
+        elif key.startswith('Dense'):
+            mlp_params[key] = val
+
+    return conv_model, conv_params, mlp_model, mlp_params
