@@ -7,8 +7,8 @@ import numpyro
 import numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS, init_to_median
 
-from .priors import GPPriors
-from .utils import put_on_device, split_in_batches
+from ..utils.priors import GPPriors
+from ..utils.utils import put_on_device, split_in_batches
 
 kernel_fn_type = Callable[[jnp.ndarray, jnp.ndarray, Dict[str, jnp.ndarray], jnp.ndarray],  jnp.ndarray]
 

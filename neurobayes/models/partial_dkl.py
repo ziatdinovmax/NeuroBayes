@@ -7,9 +7,9 @@ import numpyro.distributions as dist
 from numpyro.contrib.module import random_flax_module
 
 from .dkl import DKL
-from .priors import GPPriors
-from .flax_nets import split_mlp
-from .deterministic_nn import DeterministicNN
+from ..utils.priors import GPPriors
+from ..flax_nets import split_mlp
+from ..flax_nets import DeterministicNN
 
 kernel_fn_type = Callable[[jnp.ndarray, jnp.ndarray, Dict[str, jnp.ndarray], jnp.ndarray],  jnp.ndarray]
 

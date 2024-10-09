@@ -7,7 +7,7 @@ import optax
 from functools import partial
 from tqdm import tqdm
 
-from .utils import split_in_batches
+from ..utils.utils import split_in_batches
 
 
 class TrainState(train_state.TrainState):

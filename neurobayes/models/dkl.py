@@ -6,9 +6,9 @@ import numpyro.distributions as dist
 from numpyro.contrib.module import random_flax_module
 
 from .gp import GP
-from .flax_nets import FlaxMLP
-from .priors import GPPriors
-from .utils import get_flax_compatible_dict
+from ..flax_nets import FlaxMLP
+from ..utils.priors import GPPriors
+from ..utils.utils import get_flax_compatible_dict
 
 
 kernel_fn_type = Callable[[jnp.ndarray, jnp.ndarray, Dict[str, jnp.ndarray], jnp.ndarray],  jnp.ndarray]
