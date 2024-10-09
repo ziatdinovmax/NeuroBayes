@@ -8,7 +8,7 @@ from numpyro.contrib.module import random_flax_module
 
 from .dkl import DKL
 from ..utils.priors import GPPriors
-from ..flax_nets import split_mlp
+from ..flax_nets import FlaxMLP, FlaxConvNet, split_mlp, split_convnet
 from ..flax_nets import DeterministicNN
 
 kernel_fn_type = Callable[[jnp.ndarray, jnp.ndarray, Dict[str, jnp.ndarray], jnp.ndarray],  jnp.ndarray]
@@ -18,6 +18,13 @@ class PartialDKL(DKL):
     """
     Partially stochastic DKL
     """
+
+     # Dictionary mapping network types to their corresponding splitter functions
+    SPLITTERS = {
+        FlaxMLP: split_mlp,
+        FlaxConvNet: split_convnet,
+        # Add more network types and their splitters here
+    }
 
     def __init__(self,
                  latent_dim: int,
@@ -30,9 +37,15 @@ class PartialDKL(DKL):
                  jitter: float = 1e-6,
                  ) -> None:
         super(PartialDKL, self).__init__(input_dim, latent_dim, base_kernel, priors, jitter)
+
+        self.nn_type = type(deterministic_nn)
+        if self.nn_type not in self.SPLITTERS:
+            raise ValueError(f"Unsupported network type: {self.nn_type}")
+        self.splitter = self.SPLITTERS[self.nn_type]
+
         if deterministic_weights:
             (self.truncated_nn, self.truncated_params,
-             self.nn) = split_mlp(
+             self.nn) = self.splitter(
                  deterministic_nn, deterministic_weights,
                  num_stochastic_layers, latent_dim)[:-1]
         else:
@@ -113,7 +126,7 @@ class PartialDKL(DKL):
                 learning_rate=sgd_lr, swa_epochs=sgd_wa_epochs, sigma=map_sigma)
             det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs, sgd_batch_size)
             (self.truncated_nn, self.truncated_params,
-            self.nn) = split_mlp(
+            self.nn) = self.splitter(
                 det_nn.model, det_nn.state.params,
                 self.num_stochastic_layers, self.kernel_dim)[:-1]
             print("Training partially Bayesian DKL")
