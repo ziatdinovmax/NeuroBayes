@@ -177,39 +177,57 @@ def get_conv_and_pool_ops(input_dim: int, kernel_size: Union[int, Tuple[int, ...
     return ops[input_dim]
 
 
-def split_convnet(model: FlaxConvNet, params: Dict[str, Any]):
+def split_convnet(model: FlaxConvNet, params: Dict[str, Any], n_layers: int = 1):
     """
-    Splits ConvNet and its weights into two parts: convolutional layers and MLP (fully connected layers).
+    Splits FlaxConvNet and its weights into two parts: deterministic (conv + deterministic MLP) and 
+    stochastic MLP layers.
     
     Args:
         model (FlaxConvNet): The original model to split
         params (dict): The parameters of the original model
+        n_layers (int): Number of MLP layers to be considered stochastic (from the end)
     
     Returns:
-        tuple: (conv_model, conv_params, mlp_model, mlp_params)
+        tuple: (det_model, det_params, stoch_model, stoch_params)
     """
-    conv_model = FlaxConvNet(
+    det_fc_layers = model.fc_layers[:-n_layers] if n_layers > 0 else model.fc_layers
+    stoch_fc_layers = model.fc_layers[-n_layers:] if n_layers > 0 else []
+    
+    det_model = FlaxConvNet(
         input_dim=model.input_dim,
         conv_layers=model.conv_layers,
-        fc_layers=[],
-        output_dim=0,
+        fc_layers=det_fc_layers,
+        output_dim=0,  # No output layer in deterministic part
         activation=model.activation,
         kernel_size=model.kernel_size
     )
     
-    mlp_model = FlaxMLP(
-        hidden_dims=model.fc_layers,
+    stoch_model = FlaxMLP(
+        hidden_dims=stoch_fc_layers,
         output_dim=model.output_dim,
         activation=model.activation
     )
 
-    conv_params = {}
-    mlp_params = {}
+    det_params = {}
+    stoch_params = {}
     
     for key, val in params.items():
         if key.startswith('Conv'):
-            conv_params[key] = val
-        elif key.startswith('Dense'):
-            mlp_params[key] = val
+            det_params[key] = val
+        elif key == 'FlaxMLP_0':
+            mlp_params = val
+            det_mlp_params = {}
+            stoch_mlp_params = {}
+            for layer_key, layer_val in mlp_params.items():
+                layer_num = int(layer_key[5:])  # Extract number from 'DenseX'
+                if layer_num < len(det_fc_layers):
+                    det_mlp_params[layer_key] = layer_val
+                else:
+                    new_key = f"Dense{layer_num - len(det_fc_layers)}"
+                    stoch_mlp_params[new_key] = layer_val
+            if det_mlp_params:
+                det_params['FlaxMLP_0'] = det_mlp_params
+            if stoch_mlp_params:
+                stoch_params = stoch_mlp_params
 
-    return conv_model, conv_params, mlp_model, mlp_params
+    return det_model, det_params, stoch_model, stoch_params
