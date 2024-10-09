@@ -8,9 +8,9 @@ from numpy.testing import assert_equal, assert_array_equal
 
 sys.path.insert(0, "../neurobayes/")
 
-from neurobayes.partial_bnn import PartialBNN
-from neurobayes.flax_nets import FlaxMLP
-from neurobayes.deterministic_nn import DeterministicNN
+from neurobayes.models.partial_bnn import PartialBNN
+from neurobayes.flax_nets.mlp import FlaxMLP
+from neurobayes.flax_nets.deterministic_nn import DeterministicNN
 
 
 def get_dummy_data(feature_dim=1, target_dim=1, squeezed=False, n_points=8):
