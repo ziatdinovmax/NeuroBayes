@@ -8,7 +8,7 @@ from numpy.testing import assert_equal, assert_array_equal
 
 sys.path.insert(0, "../neurobayes/")
 
-from neurobayes.bnn import BNN
+from neurobayes.models.bnn import BNN
 
 
 def get_dummy_data(feature_dim=1, target_dim=1, squeezed=False, n_points=8):

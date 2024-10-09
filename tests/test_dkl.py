@@ -8,8 +8,8 @@ from numpy.testing import assert_equal, assert_array_equal
 
 sys.path.insert(0, "../neurobayes/")
 
-from neurobayes.dkl import DKL
-from neurobayes.kernels import RBFKernel
+from neurobayes.models.dkl import DKL
+from neurobayes.models.kernels import RBFKernel
 
 
 def get_dummy_data(feature_dim=1, target_dim=1, squeezed=False, n_points=8):

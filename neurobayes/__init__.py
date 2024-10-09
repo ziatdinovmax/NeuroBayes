@@ -1,19 +1,19 @@
-from .gp import GP
-from .vigp import VIGP
-from .dkl import DKL
-from .vidkl import VIDKL
-from .bnn import BNN
-from .partial_bnn import PartialBNN
-from .partial_dkl import PartialDKL
-from .bnn_heteroskedastic import HeteroskedasticBNN
-from .bnn_heteroskedastic_model import VarianceModelHeteroskedasticBNN
-from .partial_bnn_heteroskedastic import HeteroskedasticPartialBNN
-from .deterministic_nn import DeterministicNN
+from .models.gp import GP
+from .models.vigp import VIGP
+from .models.dkl import DKL
+from .models.vidkl import VIDKL
+from .models.bnn import BNN
+from .models.partial_bnn import PartialBNN
+from .models.partial_dkl import PartialDKL
+from .models.bnn_heteroskedastic import HeteroskedasticBNN
+from .models.bnn_heteroskedastic_model import VarianceModelHeteroskedasticBNN
+from .models.partial_bnn_heteroskedastic import HeteroskedasticPartialBNN
+from .flax_nets.deterministic_nn import DeterministicNN
 
-from . import kernels
-from . import priors
-from . import utils
-from . import genfunc
+from .models import kernels
+from .utils import priors
+from .utils import utils
+from .utils import genfunc
 
 __all__ = [
     "GP",
