@@ -1,4 +1,4 @@
-from typing import Dict, Optional, Type, Tuple
+from typing import Dict, Optional, Type, Tuple, Union, Callable
 import jax.numpy as jnp
 import flax
 
@@ -7,9 +7,8 @@ import numpyro.distributions as dist
 from numpyro.contrib.module import random_flax_module
 
 from .bnn import BNN
-from .flax_nets import split_mlp
+from .flax_nets import FlaxMLP, FlaxConvNet, split_mlp,  split_convnet
 from .deterministic_nn import DeterministicNN
-
 
 class PartialBNN(BNN):
     """
@@ -17,29 +16,41 @@ class PartialBNN(BNN):
 
     Args:
         deterministic_nn:
-            Neural network architecture
-            (will be split into determinsitic and stochastic parts)
+            Neural network architecture (MLP, ConvNet, or other supported types)
         deterministic_weights:
             Pre-trained deterministic weights, If not provided,
             the deterministic_nn will be trained from scratch when running .fit() method
         input_dim:
-            Number of features in the input data
+            Number of features in the input data (for MLP) or number of dimensions (for ConvNet)
         num_stochastic_layers:
             Number of layers at the end of deterministic_nn to be treated as fully stochastic (Bayesian)
         noise_prior:
             Custom prior on observational noise distribution
     """
+    # Dictionary mapping network types to their corresponding splitter functions
+    SPLITTERS = {
+        FlaxMLP: split_mlp,
+        FlaxConvNet: split_convnet,
+        # Add more network types and their splitters here
+    }
+
     def __init__(self,
-                 deterministic_nn: Type[flax.linen.Module],
+                 deterministic_nn: Union[Type[FlaxMLP], Type[FlaxConvNet]],
                  deterministic_weights: Optional[Dict[str, jnp.ndarray]] = None,
                  input_dim: int = None,
                  num_stochastic_layers: int = 1,
                  noise_prior: Optional[dist.Distribution] = None
                  ) -> None:
         super().__init__(None, None, noise_prior=noise_prior)
+        
+        self.nn_type = type(deterministic_nn)
+        if self.nn_type not in self.SPLITTERS:
+            raise ValueError(f"Unsupported network type: {self.nn_type}")
+        self.splitter = self.SPLITTERS[self.nn_type]
+        
         if deterministic_weights:
             (self.subnet1, self.subnet1_params,
-             self.subnet2, self.subnet2_params) = split_mlp(
+             self.subnet2, self.subnet2_params) = self.splitter(
                  deterministic_nn, deterministic_weights,
                  num_stochastic_layers)
         else:
@@ -124,7 +135,7 @@ class PartialBNN(BNN):
                 learning_rate=sgd_lr, swa_epochs=sgd_wa_epochs, sigma=map_sigma)
             det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs, sgd_batch_size)
             (self.subnet1, self.subnet1_params,
-            self.subnet2, self.subnet2_params) = split_mlp(
+            self.subnet2, self.subnet2_params) = self.splitter(
                 det_nn.model, det_nn.state.params,
                 self.num_stochastic_layers)
             print("Training partially Bayesian NN")
