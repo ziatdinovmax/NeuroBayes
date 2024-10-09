@@ -77,7 +77,7 @@ class PartialBNN(BNN):
 
         bnn = random_flax_module(
             "nn", self.subnet2,
-            input_shape=(1, self.subnet1.hidden_dims[-1]),
+            input_shape=(1, X.shape[-1]),
             prior=prior)
 
         # Pass inputs through a NN with the sampled parameters
