@@ -8,7 +8,7 @@ import numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS, init_to_median, Predictive
 from numpyro.contrib.module import random_flax_module
 
-from ..flax_nets import FlaxMLP
+from ..flax_nets import FlaxMLP, FlaxConvNet
 from ..utils.utils import put_on_device, split_dict
 
 
@@ -28,13 +28,18 @@ class BNN:
                  input_dim: int,
                  output_dim: int,
                  hidden_dim: List[int] = None,
+                 conv_layers: List[int] = None,
                  activation: str = 'tanh',
                  noise_prior: Optional[dist.Distribution] = None
                  ) -> None:
         if noise_prior is None:
             noise_prior = dist.HalfNormal(1.0)
-        hdim = hidden_dim if hidden_dim is not None else [32, 16, 8]
-        self.nn = FlaxMLP(hdim, output_dim, activation)
+        if conv_layers:
+            hdim = hidden_dim if hidden_dim is not None else [int(conv_layers[-1] * 2),]
+            self.nn = FlaxConvNet(input_dim, conv_layers, hdim, output_dim, activation)
+        else:
+            hdim = hidden_dim if hidden_dim is not None else [32, 16, 8]
+            self.nn = FlaxMLP(hdim, output_dim, activation)
         self.input_dim = input_dim
         self.noise_prior = noise_prior
 
