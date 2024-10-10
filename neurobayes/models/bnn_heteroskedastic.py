@@ -7,7 +7,7 @@ from numpyro.infer import Predictive
 from numpyro.contrib.module import random_flax_module
 
 from .bnn import BNN
-from ..flax_nets import FlaxMLP2Head
+from ..flax_nets import FlaxMLP2Head, FlaxConvNet2Head
 from ..utils.utils import put_on_device
 
 
@@ -20,13 +20,18 @@ class HeteroskedasticBNN(BNN):
                  input_dim: int,
                  output_dim: int,
                  hidden_dim: List[int] = None,
+                 conv_layers: List[int] = None,
                  activation: str = 'tanh',
                  ) -> None:
-        super().__init__(input_dim, output_dim, hidden_dim, activation)
+        super().__init__(input_dim, output_dim, hidden_dim, conv_layers, activation)
 
-        # Override the MLP functions with heteroskedastic versions
-        hdim = hidden_dim if hidden_dim is not None else [32, 16, 8]
-        self.nn = FlaxMLP2Head(hdim, output_dim, activation)
+        # Override the default mlp/convnet with heteroskedastic versions
+        if conv_layers:
+            hdim = hidden_dim if hidden_dim is not None else [int(conv_layers[-1] * 2),]
+            self.nn = FlaxConvNet2Head(input_dim, conv_layers, hdim, output_dim, activation)
+        else:
+            hdim = hidden_dim if hidden_dim is not None else [32, 16, 8]
+            self.nn = FlaxMLP2Head(hdim, output_dim, activation)        
 
     def model(self,
               X: jnp.ndarray,
