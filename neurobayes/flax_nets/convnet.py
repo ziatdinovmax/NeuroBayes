@@ -34,37 +34,7 @@ class FlaxConvNet(nn.Module):
             activation=self.activation)(x)
 
         return x
-    
-class FlaxConvNet(nn.Module):
-    input_dim: int
-    conv_layers: Sequence[int]
-    fc_layers: Sequence[int]
-    output_dim: int
-    activation: str = 'tanh'
-    kernel_size: Union[int, Tuple[int, ...]] = 3
 
-    @nn.compact
-    def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
-        activation_fn = nn.tanh if self.activation == 'tanh' else nn.silu
-        conv, pool = get_conv_and_pool_ops(self.input_dim, self.kernel_size)
-
-        # Convolutional layers
-        for i, filters in enumerate(self.conv_layers):
-            x = conv(features=filters, name=f"Conv{i}")(x)
-            x = activation_fn(x)
-            x = pool(x)
-
-        # Flatten the output for the fully connected layers
-        x = x.reshape((x.shape[0], -1))
-
-        # Use FlaxMLP for fully connected layers
-        x = FlaxMLP(
-            hidden_dims=self.fc_layers,
-            output_dim=self.output_dim,
-            activation=self.activation)(x)
-
-        return x
-        
 
 class FlaxConvNet2Head(nn.Module):
 
