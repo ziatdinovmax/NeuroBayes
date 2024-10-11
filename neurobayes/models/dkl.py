@@ -6,7 +6,7 @@ import numpyro.distributions as dist
 from numpyro.contrib.module import random_flax_module
 
 from .gp import GP
-from ..flax_nets import FlaxMLP
+from ..flax_nets import FlaxMLP, FlaxConvNet
 from ..utils.priors import GPPriors
 from ..utils.utils import get_flax_compatible_dict
 
@@ -19,18 +19,22 @@ class DKL(GP):
     Fully Bayesian Deep Kernel Learning
     """
     def __init__(self,
-                 input_dim: int,
                  latent_dim: int,
                  base_kernel: kernel_fn_type,
                  priors: Optional[GPPriors] = None,
                  hidden_dim: List[int] = None,
+                 conv_layers: List[int] = None,
+                 input_dim: int = None,
                  activation: str = 'tanh',
                  jitter: float = 1e-6
                  ) -> None:
         super(DKL, self).__init__(latent_dim, base_kernel, priors, jitter)
-        hdim = hidden_dim if hidden_dim is not None else [32, 16, 8]
-        self.nn = FlaxMLP(hdim, latent_dim, activation)
-        self.input_dim = input_dim
+        if conv_layers:
+            hdim = hidden_dim if hidden_dim is not None else [int(conv_layers[-1] * 2),]
+            self.nn = FlaxConvNet(input_dim, conv_layers, hdim, latent_dim, activation)
+        else:
+            hdim = hidden_dim if hidden_dim is not None else [32, 16, 8]
+            self.nn = FlaxMLP(hdim, latent_dim, activation)
         
     def model(self,
               X: jnp.ndarray,
@@ -39,8 +43,9 @@ class DKL(GP):
               ) -> None:
         """DKL probabilistic model"""
         # BNN part
+        input_dim = X.shape[1:] if X.ndim > 2 else (X.shape[-1],)
         net = random_flax_module(
-            "nn", self.nn, input_shape=(1, self.input_dim),
+            "nn", self.nn, input_shape=(1, *input_dim),
             prior=(lambda name, shape: dist.Cauchy() if name == "bias" else dist.Normal()))
         z = net(X)
         # GP Part

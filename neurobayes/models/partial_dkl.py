@@ -31,12 +31,11 @@ class PartialDKL(DKL):
                  base_kernel: kernel_fn_type,
                  deterministic_nn: Type[flax.linen.Module],
                  deterministic_weights: Optional[Dict[str, jnp.ndarray]] = None,
-                 input_dim: int = None,
                  num_stochastic_layers: int = 1,
                  priors: Optional[GPPriors] = None,
                  jitter: float = 1e-6,
                  ) -> None:
-        super(PartialDKL, self).__init__(input_dim, latent_dim, base_kernel, priors, jitter)
+        super(PartialDKL, self).__init__(latent_dim, base_kernel, priors, jitter)
 
         self.nn_type = type(deterministic_nn)
         if self.nn_type not in self.SPLITTERS:
@@ -51,9 +50,6 @@ class PartialDKL(DKL):
         else:
             self.untrained_deterministic_nn = deterministic_nn
             self.num_stochastic_layers = num_stochastic_layers
-            if not input_dim:
-                raise ValueError("Please provide input data dimensions or pre-trained model parameters") 
-            self.input_dim = input_dim 
 
     def model(self, X: jnp.ndarray, y: jnp.ndarray = None, **kwargs) -> None:
         """DKL probabilistic model"""
@@ -61,7 +57,7 @@ class PartialDKL(DKL):
         X = self.truncated_nn.apply({'params': self.truncated_params}, X)
         # Fully stochastic NN part
         bnn = random_flax_module(
-            "nn", self.nn, input_shape=(1, self.truncated_nn.hidden_dims[-1]),
+            "nn", self.nn, input_shape=(1, X.shape[-1]),
             prior=(lambda name, shape: dist.Cauchy() if name == "bias" else dist.Normal()))
         # Latent encoding
         z = bnn(X)
@@ -122,7 +118,8 @@ class PartialDKL(DKL):
             print("Training deterministic NN...")
             X = self.set_data(X)
             det_nn = DeterministicNN(
-                self.untrained_deterministic_nn, self.input_dim,
+                self.untrained_deterministic_nn,
+                input_dim = X.shape[1:] if X.ndim > 2 else (X.shape[-1],), # different input dims for ConvNet and MLP
                 learning_rate=sgd_lr, swa_epochs=sgd_wa_epochs, sigma=map_sigma)
             det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs, sgd_batch_size)
             (self.truncated_nn, self.truncated_params,

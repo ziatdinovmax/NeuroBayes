@@ -20,17 +20,18 @@ class VIDKL(DKL):
     """
 
     def __init__(self,
-                 input_dim: int,
                  latent_dim: int,
                  base_kernel: kernel_fn_type,
                  priors: Optional[GPPriors] = None,
                  hidden_dim: List[int] = None,
+                 conv_layers: List[int] = None,
+                 input_dim: int = None,
                  activation: str = 'tanh',
                  jitter: float = 1e-6
                  ) -> None:
         super(VIDKL, self).__init__(
-            input_dim, latent_dim, base_kernel,
-            priors, hidden_dim, activation, jitter)
+            latent_dim, base_kernel, priors, hidden_dim,
+            conv_layers, input_dim, activation, jitter)
 
     def fit(self, X: jnp.ndarray, y: jnp.ndarray,
             num_steps: int = 1000, step_size: float = 5e-3,
