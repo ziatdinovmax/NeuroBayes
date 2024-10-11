@@ -15,23 +15,22 @@ class HeteroskedasticBNN(BNN):
     """
     Heteroskedastic Bayesian Neural Net
     """
-
     def __init__(self,
-                 input_dim: int,
-                 output_dim: int,
+                 target_dim: int,
                  hidden_dim: List[int] = None,
                  conv_layers: List[int] = None,
+                 input_dim: int = None,
                  activation: str = 'tanh',
                  ) -> None:
-        super().__init__(input_dim, output_dim, hidden_dim, conv_layers, activation)
+        super().__init__(target_dim, hidden_dim, conv_layers, activation)
 
         # Override the default mlp/convnet with heteroskedastic versions
         if conv_layers:
             hdim = hidden_dim if hidden_dim is not None else [int(conv_layers[-1] * 2),]
-            self.nn = FlaxConvNet2Head(input_dim, conv_layers, hdim, output_dim, activation)
+            self.nn = FlaxConvNet2Head(input_dim, conv_layers, hdim, target_dim, activation)
         else:
             hdim = hidden_dim if hidden_dim is not None else [32, 16, 8]
-            self.nn = FlaxMLP2Head(hdim, output_dim, activation)        
+            self.nn = FlaxMLP2Head(hdim, target_dim, activation)        
 
     def model(self,
               X: jnp.ndarray,
@@ -50,8 +49,10 @@ class HeteroskedasticBNN(BNN):
             else:
                 return dist.Normal(0., 1.0)
 
+        input_dim = X.shape[1:] if X.ndim > 2 else (X.shape[-1],)
+
         net = random_flax_module(
-            "nn", self.nn, input_shape=(1, self.input_dim), prior=prior)
+            "nn", self.nn, input_shape=(1, *input_dim), prior=prior)
 
         # Pass inputs through a NN with the sampled parameters
         mu, sig = net(X)
