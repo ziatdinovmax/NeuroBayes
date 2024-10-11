@@ -59,9 +59,11 @@ class BNN:
                 return dist.Normal(mean, 1.0)
             else:
                 return dist.Normal(0., 1.0)
-            
+        
+        input_dim = X.shape[1:] if X.ndim > 2 else (X.shape[-1],)
+
         net = random_flax_module(
-            "nn", self.nn, input_shape=(1, self.input_dim), prior=prior)
+            "nn", self.nn, input_shape=(1, *input_dim), prior=prior)
 
         # Pass inputs through a NN with the sampled parameters
         mu = numpyro.deterministic("mu", net(X))
@@ -84,7 +86,10 @@ class BNN:
         Run HMC to infer parameters of the BNN
 
         Args:
-            X: 2D feature vector
+            X:
+                2D feature vector of (n_samples, n_features) shape or
+                N-D input of shape (n_samples, *ndims, n_channels) where
+                ndims = 1 for spectral data and ndims = 2 for image data
             y: 1D target vector
             num_warmup: number of HMC warmup states
             num_samples: number of HMC samples
