@@ -86,9 +86,9 @@ class BNN:
 
         Args:
             X:
-                2D feature vector of (n_samples, n_features) shape or
-                N-D input of shape (n_samples, *ndims, n_channels) where
-                ndims = 1 for spectral data and ndims = 2 for image data
+                2D feature vector of shape(n_samples, n_features) for MLP or
+                N-D input of shape (n_samples, *dims, n_channels) for convnet where
+                dims = (length,) for spectral data and dims = (height, width) for image data
             y: 1D target vector
             num_warmup: number of HMC warmup states
             num_samples: number of HMC samples
