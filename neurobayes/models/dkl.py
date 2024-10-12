@@ -28,7 +28,7 @@ class DKL(GP):
                  activation: str = 'tanh',
                  jitter: float = 1e-6
                  ) -> None:
-        super(DKL, self).__init__(latent_dim, base_kernel, priors, jitter)
+        super(DKL, self).__init__(base_kernel, priors, jitter)
         if conv_layers:
             hdim = hidden_dim if hidden_dim is not None else [int(conv_layers[-1] * 2),]
             self.nn = FlaxConvNet(input_dim, conv_layers, hdim, latent_dim, activation)
