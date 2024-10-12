@@ -51,7 +51,7 @@ class DKL(GP):
         # GP Part
         f_loc = jnp.zeros(X.shape[0])
         # Sample kernel parameters
-        kernel_params = self.sample_kernel_params()
+        kernel_params = self.sample_kernel_params(kernel_dim=z.shape[-1])
         # Sample observational noise variance
         noise = self.sample_noise()
         # Compute kernel
