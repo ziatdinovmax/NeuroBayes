@@ -1,4 +1,4 @@
-from typing import Dict, Type, Any
+from typing import Dict, Type, Any, Union, Tuple
 import jax
 import jax.numpy as jnp
 import flax
@@ -21,7 +21,7 @@ class DeterministicNN:
 
     Args:
         architecture: a Flax model
-        input_dim: input dimensions (aka number of features)
+        input_shape: (n_samples, n_features) or (n_samples, *dims, n_channels)
         loss: type of loss, 'homoskedastic' (default) or 'heteroskedastic'
         learning_rate: SGD learning rate
         map: Uses maximum a posteriori approximation with a zero-centered Gaussian prior
@@ -31,21 +31,21 @@ class DeterministicNN:
 
     def __init__(self,
                  architecture: Type[flax.linen.Module],
-                 input_dim: int,
+                 input_shape: Union[int, Tuple[int]],
                  loss: str = 'homoskedastic',
                  learning_rate: float = 0.01,
                  map: bool = True,
                  sigma: float = 1.0,
                  swa_epochs: int = 10) -> None:
         
-        input_dim = (input_dim,) if isinstance(input_dim, int) else input_dim
+        input_shape = (input_shape,) if isinstance(input_shape, int) else input_shape
         self.model = architecture
 
         if loss not in ['homoskedastic', 'heteroskedastic']:
             raise ValueError("Select between 'homoskedastic' or 'heteroskedastic' loss")
         self.loss = loss
         key = jax.random.PRNGKey(0)
-        params = self.model.init(key, jnp.ones((1, *input_dim)))['params']
+        params = self.model.init(key, jnp.ones((1, *input_shape)))['params']
         self.state = TrainState.create(
             apply_fn=self.model.apply,
             params=params,

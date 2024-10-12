@@ -23,12 +23,11 @@ class BNN:
     not just single-point estimates but entire distributions of possible outcomes,
     quantifying the inherent uncertainty.
     """
-
     def __init__(self,
                  target_dim: int,
                  hidden_dim: List[int] = None,
                  conv_layers: List[int] = None,
-                 input_dim: int = None,
+                 input_shape: int = None,
                  activation: str = 'tanh',
                  noise_prior: Optional[dist.Distribution] = None
                  ) -> None:
@@ -36,7 +35,7 @@ class BNN:
             noise_prior = dist.HalfNormal(1.0)
         if conv_layers:
             hdim = hidden_dim if hidden_dim is not None else [int(conv_layers[-1] * 2),]
-            self.nn = FlaxConvNet(input_dim, conv_layers, hdim, target_dim, activation)
+            self.nn = FlaxConvNet(input_shape, conv_layers, hdim, target_dim, activation)
         else:
             hdim = hidden_dim if hidden_dim is not None else [32, 16, 8]
             self.nn = FlaxMLP(hdim, target_dim, activation)
@@ -59,10 +58,10 @@ class BNN:
             else:
                 return dist.Normal(0., 1.0)
         
-        input_dim = X.shape[1:] if X.ndim > 2 else (X.shape[-1],)
+        input_shape = X.shape[1:] if X.ndim > 2 else (X.shape[-1],)
 
         net = random_flax_module(
-            "nn", self.nn, input_shape=(1, *input_dim), prior=prior)
+            "nn", self.nn, input_shape=(1, *input_shape), prior=prior)
 
         # Pass inputs through a NN with the sampled parameters
         mu = numpyro.deterministic("mu", net(X))
