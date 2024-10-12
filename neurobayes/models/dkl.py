@@ -43,9 +43,9 @@ class DKL(GP):
               ) -> None:
         """DKL probabilistic model"""
         # BNN part
-        input_dim = X.shape[1:] if X.ndim > 2 else (X.shape[-1],)
+        input_shape = X.shape[1:] if X.ndim > 2 else (X.shape[-1],)
         net = random_flax_module(
-            "nn", self.nn, input_shape=(1, *input_dim),
+            "nn", self.nn, input_shape=(1, *input_shape),
             prior=(lambda name, shape: dist.Cauchy() if name == "bias" else dist.Normal()))
         z = net(X)
         # GP Part

@@ -27,7 +27,7 @@ class BNN:
                  target_dim: int,
                  hidden_dim: List[int] = None,
                  conv_layers: List[int] = None,
-                 input_shape: int = None,
+                 input_dim: int = None,
                  activation: str = 'tanh',
                  noise_prior: Optional[dist.Distribution] = None
                  ) -> None:
@@ -35,7 +35,7 @@ class BNN:
             noise_prior = dist.HalfNormal(1.0)
         if conv_layers:
             hdim = hidden_dim if hidden_dim is not None else [int(conv_layers[-1] * 2),]
-            self.nn = FlaxConvNet(input_shape, conv_layers, hdim, target_dim, activation)
+            self.nn = FlaxConvNet(input_dim, conv_layers, hdim, target_dim, activation)
         else:
             hdim = hidden_dim if hidden_dim is not None else [32, 16, 8]
             self.nn = FlaxMLP(hdim, target_dim, activation)

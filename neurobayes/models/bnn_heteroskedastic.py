@@ -49,10 +49,10 @@ class HeteroskedasticBNN(BNN):
             else:
                 return dist.Normal(0., 1.0)
 
-        input_dim = X.shape[1:] if X.ndim > 2 else (X.shape[-1],)
+        input_shape = X.shape[1:] if X.ndim > 2 else (X.shape[-1],)
 
         net = random_flax_module(
-            "nn", self.nn, input_shape=(1, *input_dim), prior=prior)
+            "nn", self.nn, input_shape=(1, *input_shape), prior=prior)
 
         # Pass inputs through a NN with the sampled parameters
         mu, sig = net(X)
