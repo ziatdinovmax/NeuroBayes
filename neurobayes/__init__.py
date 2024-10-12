@@ -9,6 +9,7 @@ from .models.bnn_heteroskedastic import HeteroskedasticBNN
 from .models.bnn_heteroskedastic_model import VarianceModelHeteroskedasticBNN
 from .models.partial_bnn_heteroskedastic import HeteroskedasticPartialBNN
 from .flax_nets.deterministic_nn import DeterministicNN
+from .flax_nets.convnet import FlaxConvNet, FlaxConvNet2Head, FlaxMLP, FlaxMLP2Head
 
 from .models import kernels
 from .utils import priors
