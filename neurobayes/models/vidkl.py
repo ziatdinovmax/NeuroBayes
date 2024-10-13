@@ -7,7 +7,7 @@ from numpyro.infer.autoguide import AutoDelta
 
 from .dkl import DKL
 from ..utils.priors import GPPriors
-from ..utils.utils import put_on_device
+from ..utils.utils import put_on_device, get_flax_compatible_dict
 
 
 kernel_fn_type = Callable[[jnp.ndarray, jnp.ndarray, Dict[str, jnp.ndarray], jnp.ndarray],  jnp.ndarray]
@@ -83,7 +83,8 @@ class VIDKL(DKL):
             self.print_summary()
 
     def get_samples(self, **kwargs):
-        return {k: v[None] for (k, v) in self.params.items()}
+        samples = {k: v[None] for (k, v) in self.params.items()}
+        return get_flax_compatible_dict(samples)
 
     def print_summary(self, print_nn_weights: bool = False) -> None:
         list_of_keys = ["k_scale", "k_length", "noise"]
