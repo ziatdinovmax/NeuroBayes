@@ -1,5 +1,7 @@
 # NeuroBayes
 
+### *Important: This package is under active development and breaking changes are expected on weekly and sometimes even daily basis*
+
 ## What is it for
 ![actove_learning](https://github.com/user-attachments/assets/203fb3ab-cfbe-4882-9cab-ec8269359110)
 
