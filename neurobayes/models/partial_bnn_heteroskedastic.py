@@ -12,13 +12,11 @@ from ..flax_nets import split_mlp2head
 
 class HeteroskedasticPartialBNN(HeteroskedasticBNN):
     """
-    Heteroskedastik Partially Bayesian Neural Network
+    Heteroskedastic Partially Bayesian Neural Network
     """
-
     def __init__(self,
                  deterministic_nn: Type[flax.linen.Module],
                  deterministic_weights: Optional[Dict[str, jnp.ndarray]] = None,
-                 input_dim: int = None,
                  num_stochastic_layers: int = 1
                  ) -> None:
         super().__init__(None, None)
@@ -29,16 +27,13 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
         else:
             self.untrained_deterministic_nn = deterministic_nn
             self.num_stochastic_layers = num_stochastic_layers
-            if not input_dim:
-                raise ValueError("Please provide input data dimensions or pre-trained model parameters")  
-            self.input_dim = input_dim
 
     def model(self,
               X: jnp.ndarray,
               y: jnp.ndarray = None,
               pretrained_priors: Dict = None,
               **kwargs) -> None:
-        """Heteroskedastik (partial) BNN probabilistic model"""
+        """Heteroskedastic (partial) BNN probabilistic model"""
 
         def prior(name, shape):
             if pretrained_priors is not None:
@@ -53,7 +48,7 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
         X = self.subnet1.apply({'params': self.subnet1_params}, X)
 
         bnn = random_flax_module(
-            "nn", self.subnet2, input_shape=(1, self.subnet1.hidden_dims[-1]), prior=prior)
+            "nn", self.subnet2, input_shape=(1, X.shape[-1]), prior=prior)
 
         # Pass inputs through a NN with the sampled parameters
         mu, sig = bnn(X)
@@ -105,9 +100,12 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
         """
         if hasattr(self, "untrained_deterministic_nn"):
             print("Training deterministic NN...")
+            X, y = self.set_data(X, y)
             det_nn = DeterministicNN(
-                self.untrained_deterministic_nn, self.input_dim, loss='heteroskedastic',
-                learning_rate=sgd_lr, swa_epochs=sgd_wa_epochs, sigma=map_sigma)
+                self.untrained_deterministic_nn,
+                input_shape = X.shape[1:] if X.ndim > 2 else (X.shape[-1],), # different input dims for ConvNet and MLP 
+                loss='heteroskedastic', learning_rate=sgd_lr,
+                swa_epochs=sgd_wa_epochs, sigma=map_sigma)
             det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs, sgd_batch_size)
             (self.subnet1, self.subnet1_params,
                 self.subnet2, self.subnet2_params) = split_mlp2head(

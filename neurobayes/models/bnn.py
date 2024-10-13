@@ -8,7 +8,7 @@ import numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS, init_to_median, Predictive
 from numpyro.contrib.module import random_flax_module
 
-from ..flax_nets import FlaxMLP
+from ..flax_nets import FlaxMLP, FlaxConvNet
 from ..utils.utils import put_on_device, split_dict
 
 
@@ -23,19 +23,22 @@ class BNN:
     not just single-point estimates but entire distributions of possible outcomes,
     quantifying the inherent uncertainty.
     """
-
     def __init__(self,
-                 input_dim: int,
-                 output_dim: int,
+                 target_dim: int,
                  hidden_dim: List[int] = None,
+                 conv_layers: List[int] = None,
+                 input_dim: int = None,
                  activation: str = 'tanh',
                  noise_prior: Optional[dist.Distribution] = None
                  ) -> None:
         if noise_prior is None:
             noise_prior = dist.HalfNormal(1.0)
-        hdim = hidden_dim if hidden_dim is not None else [32, 16, 8]
-        self.nn = FlaxMLP(hdim, output_dim, activation)
-        self.input_dim = input_dim
+        if conv_layers:
+            hdim = hidden_dim if hidden_dim is not None else [int(conv_layers[-1] * 2),]
+            self.nn = FlaxConvNet(input_dim, conv_layers, hdim, target_dim, activation)
+        else:
+            hdim = hidden_dim if hidden_dim is not None else [32, 16, 8]
+            self.nn = FlaxMLP(hdim, target_dim, activation)
         self.noise_prior = noise_prior
 
     def model(self,
@@ -54,9 +57,11 @@ class BNN:
                 return dist.Normal(mean, 1.0)
             else:
                 return dist.Normal(0., 1.0)
-            
+        
+        input_shape = X.shape[1:] if X.ndim > 2 else (X.shape[-1],)
+
         net = random_flax_module(
-            "nn", self.nn, input_shape=(1, self.input_dim), prior=prior)
+            "nn", self.nn, input_shape=(1, *input_shape), prior=prior)
 
         # Pass inputs through a NN with the sampled parameters
         mu = numpyro.deterministic("mu", net(X))
@@ -79,7 +84,10 @@ class BNN:
         Run HMC to infer parameters of the BNN
 
         Args:
-            X: 2D feature vector
+            X:
+                2D feature vector of shape(n_samples, n_features) for MLP or
+                N-D input of shape (n_samples, *dims, n_channels) for convnet where
+                dims = (length,) for spectral data and dims = (height, width) for image data
             y: 1D target vector
             num_warmup: number of HMC warmup states
             num_samples: number of HMC samples

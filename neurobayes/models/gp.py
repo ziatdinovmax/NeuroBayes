@@ -19,14 +19,13 @@ class GP:
     """
 
     def __init__(self,
-                 input_dim: int, kernel: kernel_fn_type,
+                 kernel: kernel_fn_type,
                  priors: Optional[GPPriors] = None,
                  jitter: float = 1e-6
                  ) -> None:
         if priors is None:
             priors = GPPriors()
         self.kernel = kernel
-        self.kernel_dim = input_dim
         self.priors = priors
         self.jitter = jitter
         self.X_train = None
@@ -37,7 +36,7 @@ class GP:
         # Initialize mean function at zeros
         f_loc = jnp.zeros(X.shape[0])
         # Sample kernel parameters
-        kernel_params = self.sample_kernel_params()
+        kernel_params = self.sample_kernel_params(kernel_dim=X.shape[-1])
         # Sample observational noise variance
         noise = self.sample_noise()
         # Compute kernel
@@ -110,11 +109,11 @@ class GP:
         """
         return numpyro.sample("noise", self.priors.noise_prior)
 
-    def sample_kernel_params(self) -> Dict[str, jnp.ndarray]:
+    def sample_kernel_params(self, kernel_dim: int) -> Dict[str, jnp.ndarray]:
         """
         Sample kernel parameters
         """
-        with numpyro.plate("ard", self.kernel_dim):
+        with numpyro.plate("ard", kernel_dim):
             length = numpyro.sample("k_length", self.priors.lengthscale_prior)
         scale = numpyro.sample("k_scale", self.priors.output_scale_prior)
         return {"k_length": length, "k_scale": scale}

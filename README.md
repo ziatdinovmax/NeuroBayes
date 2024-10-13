@@ -29,7 +29,7 @@ y_measured = measure(X_measured)
 Run a single shot Bayesian neural network
 ```python3
 # Initialize model
-model = BNN(input_dim=1, output_dim=1)
+model = BNN(target_dim=1)
 # Train model
 model.fit(X_measured, y_measured, num_warmup=1000, num_samples=1000)
 # Make a prediction on full domain
@@ -40,7 +40,7 @@ Run active learning with Bayesian neural network
 ```python3
 for step in range(exploration_steps):
     # Intitalize and train model
-    model = BNN(1, 1)
+    model = BNN(target_dim=1)
     model.fit(X_measured, y_measured, num_warmup=1000, num_samples=1000)
     # Make a prediction on unmeasured points or the full domain
     posterior_mean, posterior_var = model.predict(X_domain)
@@ -69,7 +69,7 @@ net = FlaxMLP(hidden_dims=[32, 16, 8, 8], output_dim=1)
 for step in range(exploration_steps):
     print('step {}'.format(step))
     # Intitalize and train model
-    model = PartialBNN(net, input_dim=8, num_stochastic_layers=num_stochastic_layers)
+    model = PartialBNN(net, num_stochastic_layers=num_stochastic_layers)
     model.fit(X_measured, y_measured, sgd_epochs=sgd_epochs, sgd_lr=sgd_lr, sgd_batch_size=16, num_warmup=1000, num_samples=1000)
     # Make a prediction on unmeasured points or the full domain
     posterior_mean, posterior_var = model.predict(X_domain)
@@ -93,7 +93,7 @@ The usage of a heteroskedastic BNN is straightforward and follows the same patte
 For fully Bayesian heteroskedastic BNN:
 ```python3
 # Initialize HeteroskedasticBNN model
-model = HeteroskedasticBNN(input_dim=1, output_dim=1)
+model = HeteroskedasticBNN(target_dim=1)
 # Train
 model.fit(X_measured, y_measured, num_warmup=2000, num_samples=2000)
 # Make a prediction
@@ -106,7 +106,7 @@ For partially Bayesian heteroskedastic BNN:
 hidden_dims = [64, 32, 16, 8, 8]
 net = FlaxMLP2Head(hidden_dims, 1)
 # Pass it to HeteroskedasticPartialBNN module and perform training
-model = HeteroskedasticPartialBNN(net, input_dim=1, num_stochastic_layers=2)
+model = HeteroskedasticPartialBNN(net, num_stochastic_layers=2)
 model.fit(X_measured, y_measured, sgd_epochs=5000, sgd_lr=5e-3, num_warmup=1000, num_samples=1000)
 # Make a prediction
 posterior_mean, posterior_var = model.predict(X_domain)
@@ -127,7 +127,7 @@ from neurobayes.flax_nets import FlaxMLP
 
 hidden_dims = [64, 32, 16, 8]
 net = FlaxMLP(hidden_dims=hidden_dims, output_dim=1)
-detnn = nb.DeterministicNN(net, input_dim=1, learning_rate=5e-3, map=True, sigma=nb.utils.calculate_sigma(X1))
+detnn = nb.DeterministicNN(net, input_shape=(1,), learning_rate=5e-3, map=True, sigma=nb.utils.calculate_sigma(X1))
 detnn.train(X1, y1, epochs=5000, batch_size=None)
 ```
 
@@ -136,7 +136,7 @@ Note: In practice, you should use proper train-test-validation splits for robust
 Next, train a BNN on experimental data, using the pre-trained weights to set theory-informed BNN priors:
 
 ```python3
-model = nb.BNN(input_dim=1, output_dim=1, hidden_dim=hidden_dims)
+model = nb.BNN(target_dim=1, hidden_dim=hidden_dims)
 model.fit(
     X2, y2, num_warmup=1000, num_samples=1000, num_chains=1,
     pretrained_priors=detnn.state.params  # use trained weights to set priors for BNN

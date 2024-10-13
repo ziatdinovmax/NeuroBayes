@@ -7,7 +7,7 @@ from numpyro.infer.autoguide import AutoDelta
 
 from .dkl import DKL
 from ..utils.priors import GPPriors
-from ..utils.utils import put_on_device
+from ..utils.utils import put_on_device, get_flax_compatible_dict
 
 
 kernel_fn_type = Callable[[jnp.ndarray, jnp.ndarray, Dict[str, jnp.ndarray], jnp.ndarray],  jnp.ndarray]
@@ -20,17 +20,18 @@ class VIDKL(DKL):
     """
 
     def __init__(self,
-                 input_dim: int,
                  latent_dim: int,
                  base_kernel: kernel_fn_type,
                  priors: Optional[GPPriors] = None,
                  hidden_dim: List[int] = None,
+                 conv_layers: List[int] = None,
+                 input_dim: int = None,
                  activation: str = 'tanh',
                  jitter: float = 1e-6
                  ) -> None:
         super(VIDKL, self).__init__(
-            input_dim, latent_dim, base_kernel,
-            priors, hidden_dim, activation, jitter)
+            latent_dim, base_kernel, priors, hidden_dim,
+            conv_layers, input_dim, activation, jitter)
 
     def fit(self, X: jnp.ndarray, y: jnp.ndarray,
             num_steps: int = 1000, step_size: float = 5e-3,
@@ -82,7 +83,8 @@ class VIDKL(DKL):
             self.print_summary()
 
     def get_samples(self, **kwargs):
-        return {k: v[None] for (k, v) in self.params.items()}
+        samples = {k: v[None] for (k, v) in self.params.items()}
+        return get_flax_compatible_dict(samples)
 
     def print_summary(self, print_nn_weights: bool = False) -> None:
         list_of_keys = ["k_scale", "k_length", "noise"]
