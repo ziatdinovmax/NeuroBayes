@@ -26,7 +26,7 @@ def get_dummy_data(feature_dim=1, target_dim=1, squeezed=False, n_points=8):
 def test_pbnn_fit_all(n_features, n_targets, squeezed):
     X, y = get_dummy_data(n_features, n_targets, squeezed)
     net = FlaxMLP(hidden_dims=[4, 2], output_dim=n_targets)
-    pbnn = PartialBNN(net, input_dim=n_features, num_stochastic_layers=1)
+    pbnn = PartialBNN(net, num_stochastic_layers=1)
     pbnn.fit(X, y, num_warmup=10, num_samples=10)
     assert pbnn.mcmc is not None
 
@@ -40,7 +40,7 @@ def test_pbnn_fit_pretrained(n_features, n_targets, squeezed):
     detnn_model.train(X, y, epochs=10)
     pbnn = PartialBNN(
         detnn_model.model, detnn_model.state.params,
-        input_dim=n_features, num_stochastic_layers=1)
+        num_stochastic_layers=1)
     pbnn.fit(X, y, num_warmup=10, num_samples=10)
     assert pbnn.mcmc is not None
 
@@ -51,7 +51,7 @@ def test_bnn_fit_predict(n_features, n_targets):
     X, y = get_dummy_data(n_features, n_targets)
     X_test, _ = get_dummy_data(n_features, n_targets, n_points=20)
     net = FlaxMLP(hidden_dims=[4, 2], output_dim=n_targets)
-    pbnn = PartialBNN(net, input_dim=n_features, num_stochastic_layers=1)
+    pbnn = PartialBNN(net, num_stochastic_layers=1)
     pbnn.fit(X, y, num_warmup=10, num_samples=10)
     pmean, pvar = pbnn.predict(X_test)
     assert_equal(pmean.shape, (len(X_test), n_targets))

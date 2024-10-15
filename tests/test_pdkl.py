@@ -25,7 +25,7 @@ def get_dummy_data(feature_dim=1, target_dim=1, squeezed=False, n_points=8):
 def test_dkl_fit_all(n_latent, squeezed):
     net = FlaxMLP(hidden_dims=[4, 2], output_dim=1)
     X, y = get_dummy_data(4, 1, squeezed)
-    dkl = PartialDKL(n_latent, RBFKernel, net, input_dim=4)
+    dkl = PartialDKL(n_latent, RBFKernel, net)
     dkl.fit(X, y, num_warmup=10, num_samples=10)
     assert dkl.mcmc is not None
 
@@ -34,7 +34,7 @@ def test_dkl_fit_predict():
     net = FlaxMLP(hidden_dims=[4, 2], output_dim=1)
     X, y = get_dummy_data(4)
     X_test, _ = get_dummy_data(4, n_points=20)
-    dkl = PartialDKL(1, RBFKernel, net, input_dim=4)
+    dkl = PartialDKL(1, RBFKernel, net)
     dkl.fit(X, y, num_warmup=10, num_samples=10)
     pmean, pvar = dkl.predict(X_test)
     assert_equal(pmean.shape, (len(X_test),))

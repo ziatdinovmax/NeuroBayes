@@ -23,7 +23,7 @@ def get_dummy_data(feature_dim=1, target_dim=1, squeezed=False, n_points=8):
 @pytest.mark.parametrize("squeezed", [True, False])
 def test_bnn_fit(n_features, n_targets, squeezed):
     X, y = get_dummy_data(n_features, n_targets, squeezed)
-    bnn = BNN(n_features, n_targets, hidden_dim=[4, 2])
+    bnn = BNN(n_targets, hidden_dim=[4, 2])
     bnn.fit(X, y, num_warmup=10, num_samples=10)
     assert bnn.mcmc is not None
 
@@ -33,7 +33,7 @@ def test_bnn_fit(n_features, n_targets, squeezed):
 def test_bnn_fit_predict(n_features, n_targets):
     X, y = get_dummy_data(n_features, n_targets)
     X_test, _ = get_dummy_data(n_features, n_targets, n_points=20)
-    bnn = BNN(n_features, n_targets, hidden_dim=[4, 2])
+    bnn = BNN(n_targets, hidden_dim=[4, 2])
     bnn.fit(X, y, num_warmup=10, num_samples=10)
     pmean, pvar = bnn.predict(X_test)
     assert_equal(pmean.shape, (len(X_test), n_targets))
