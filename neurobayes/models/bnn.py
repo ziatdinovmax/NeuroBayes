@@ -77,7 +77,7 @@ class BNN:
             num_warmup: int = 2000, num_samples: int = 2000,
             num_chains: int = 1, chain_method: str = 'sequential',
             pretrained_priors: Optional[Dict[str, Dict[str, jnp.ndarray]]] = None,
-            pretrained_priors_sigma: Optional[float] = 1.0,
+            priors_sigma: Optional[float] = 1.0,
             progress_bar: bool = True, device: str = None,
             rng_key: Optional[jnp.array] = None,
             extra_fields: Optional[Tuple[str]] = (),
@@ -123,7 +123,7 @@ class BNN:
         )
         self.mcmc.run(
             key, X, y,
-            pretrained_priors, pretrained_priors_sigma,
+            pretrained_priors, priors_sigma,
             extra_fields=extra_fields)
 
     def get_samples(self, chain_dim: bool = False) -> Dict[str, jnp.ndarray]:
