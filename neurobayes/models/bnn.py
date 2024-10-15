@@ -45,6 +45,7 @@ class BNN:
               X: jnp.ndarray,
               y: jnp.ndarray = None,
               pretrained_priors: Dict = None,
+              priors_sigma: float = 1.0,
               **kwargs) -> None:
         """BNN probabilistic model"""
         
@@ -54,9 +55,9 @@ class BNN:
                 mean = pretrained_priors
                 for path in param_path:
                     mean = mean[path]
-                return dist.Normal(mean, 1.0)
+                return dist.Normal(mean, priors_sigma)
             else:
-                return dist.Normal(0., 1.0)
+                return dist.Normal(0., priors_sigma)
         
         input_shape = X.shape[1:] if X.ndim > 2 else (X.shape[-1],)
 
@@ -76,6 +77,7 @@ class BNN:
             num_warmup: int = 2000, num_samples: int = 2000,
             num_chains: int = 1, chain_method: str = 'sequential',
             pretrained_priors: Optional[Dict[str, Dict[str, jnp.ndarray]]] = None,
+            pretrained_priors_sigma: Optional[float] = 1.0,
             progress_bar: bool = True, device: str = None,
             rng_key: Optional[jnp.array] = None,
             extra_fields: Optional[Tuple[str]] = (),
@@ -99,6 +101,7 @@ class BNN:
                 is performed on the JAX default device.
             rng_key: random number generator key
             pretrained_priors: Dictionary with mean values for Normal prior distributions over model weights and biases
+            priors_sigma: Standard deviation for default or pretrained priors (defaults to 1.0)
             extra_fields:
                 Extra fields (e.g. 'accept_prob') to collect during the HMC run.
                 The extra fields are accessible from model.mcmc.get_extra_fields() after model training.
@@ -118,7 +121,10 @@ class BNN:
             progress_bar=progress_bar,
             jit_model_args=False
         )
-        self.mcmc.run(key, X, y, pretrained_priors, extra_fields=extra_fields)
+        self.mcmc.run(
+            key, X, y,
+            pretrained_priors, pretrained_priors_sigma,
+            extra_fields=extra_fields)
 
     def get_samples(self, chain_dim: bool = False) -> Dict[str, jnp.ndarray]:
         """Get posterior samples (after running the MCMC chains)"""

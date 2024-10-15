@@ -50,6 +50,7 @@ class PartialDKL(DKL):
         else:
             self.untrained_deterministic_nn = deterministic_nn
             self.num_stochastic_layers = num_stochastic_layers
+            self.latent_dim = latent_dim
 
     def model(self, X: jnp.ndarray, y: jnp.ndarray = None, **kwargs) -> None:
         """DKL probabilistic model"""
@@ -64,7 +65,7 @@ class PartialDKL(DKL):
         # GP Part
         f_loc = jnp.zeros(X.shape[0])
         # Sample kernel parameters
-        kernel_params = self.sample_kernel_params()
+        kernel_params = self.sample_kernel_params(kernel_dim=z.shape[-1])
         # Sample observational noise variance
         noise = self.sample_noise()
         # Compute kernel
@@ -125,7 +126,7 @@ class PartialDKL(DKL):
             (self.truncated_nn, self.truncated_params,
             self.nn) = self.splitter(
                 det_nn.model, det_nn.state.params,
-                self.num_stochastic_layers, self.kernel_dim)[:-1]
+                self.num_stochastic_layers, self.latent_dim)[:-1]
             print("Training partially Bayesian DKL")
         super().fit(X, y, num_warmup, num_samples, num_chains, chain_method, progress_bar, print_summary, device, rng_key, extra_fields)
 
