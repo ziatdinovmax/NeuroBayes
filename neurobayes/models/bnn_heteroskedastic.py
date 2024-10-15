@@ -36,6 +36,7 @@ class HeteroskedasticBNN(BNN):
               X: jnp.ndarray,
               y: jnp.ndarray = None,
               pretrained_priors: Dict = None,
+              priors_sigma: float = 1.0,
               **kwargs) -> None:
         """Heteroskedastic BNN probabilistic model"""
 
@@ -45,9 +46,9 @@ class HeteroskedasticBNN(BNN):
                 mean = pretrained_priors
                 for path in param_path:
                     mean = mean[path]
-                return dist.Normal(mean, 1.0)
+                return dist.Normal(mean, priors_sigma)
             else:
-                return dist.Normal(0., 1.0)
+                return dist.Normal(0., priors_sigma)
 
         input_shape = X.shape[1:] if X.ndim > 2 else (X.shape[-1],)
 
