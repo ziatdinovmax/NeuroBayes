@@ -3,7 +3,8 @@
 ### *Important: This package is under active development and breaking changes are expected on weekly and sometimes even daily basis*
 
 ## What is it for
-![actove_learning](https://github.com/user-attachments/assets/203fb3ab-cfbe-4882-9cab-ec8269359110)
+![NB](https://github.com/user-attachments/assets/f557c411-122d-414b-a976-903f74af9baf)
+
 
 
 Active learning optimizes the exploration of large parameter spaces by strategically selecting experiments or simulations, reducing resource use and accelerating discovery. A crucial element is a probabilistic surrogate model, typically a Gaussian Process (GP), which approximates the relationship between control parameters and a target property. However, GPs struggle with systems featuring discontinuities and non-stationarities, common in physical science problems. Fully Bayesian Neural Networks (FBNNs) offer a promising alternative by treating all network weights probabilistically and using advanced Markov Chain Monte Carlo techniques for for direct sampling from the posterior distribution. This approach provides reliable predictive distributions, crucial for decision-making under uncertainty. Although FBNNs are traditionally seen as computationally expensive for big data, many physical science problems involve small data sets, making FBNNs feasible. For more complex parameter spaces, Partially Bayesian Neural Networks (PBNNs) can be used, where only some neurons are Bayesian. This repository enables the use of FBNNs and PBNNs with the No-U-Turn Sampler in active and transfer learning tasks for small and intermediate data volumes, demonstrating their potential in physical science applications.
