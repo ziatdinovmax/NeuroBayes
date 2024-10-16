@@ -10,84 +10,39 @@ Machine learning, at its core, is about approximating unknown functions – mapp
 
 
 ## How to use
-### Fully Bayesian Neural Nets
-Initialize a simulator
-```python3
-import neurobayes as nb
 
-(x_start, x_stop), fn = genfunc.nonstationary2()
+NeuroBayes provides two main approaches for implementing Bayesian Neural Networks: Fully Bayesian Neural Networks (BNN) and Partially Bayesian Neural Networks (PBNN). Both approaches currently support MLP and ConvNet architectures, with more architectures on the way. Here's how to use BNN and PBNN:
 
-# Generate ground truth data
-X_domain = np.linspace(x_start, x_stop, 500)
-y_true = fn(X_domain)
+#### Fully Bayesian Neural Nets
+Fully Bayesian Neural Networks replace all constant weights in the network with probabilistic distributions. This approach provides comprehensive uncertainty quantification but may be computationally intensive for large models.
 
-# Create a measurement function
-measure = lambda x: fn(x) + np.random.normal(0, 0.02, size=len(x))
-
-# Generate initial dataset
-X_measured = np.random.uniform(x_start, x_stop, 50)
-y_measured = measure(X_measured)
-```
-
-Run a single shot Bayesian neural network
 ```python3
 # Initialize model
-model = BNN(target_dim=1)
+model = BNN(target_dim=1, hidden_dim=[32, 16, 8, 4])
 # Train model
 model.fit(X_measured, y_measured, num_warmup=1000, num_samples=1000)
 # Make a prediction on full domain
 posterior_mean, posterior_var = model.predict(X_domain)
 ```
 
-Run active learning with Bayesian neural network
+#### Partially Bayesian Neural Network
+Partially Bayesian Neural Networks replace constant weights with probabilistic distributions only in a subset of the network's layers. This approach ismore computationally efficient while still providing good uncertainty estimates. By default, the deterministic part of PBNNs is trained using Maximum A Posteriori approximation, with stochastic weight averaging applied at the end of each training trajectory.
+
 ```python3
-for step in range(exploration_steps):
-    # Intitalize and train model
-    model = BNN(target_dim=1)
-    model.fit(X_measured, y_measured, num_warmup=1000, num_samples=1000)
-    # Make a prediction on unmeasured points or the full domain
-    posterior_mean, posterior_var = model.predict(X_domain)
-    # Select next point to evaluate
-    next_point_idx = posterior_var.argmax(0)
-    X_next = X_domain[next_point_idx]
-    # Evaluate function in this point
-    y_next = measure(X_next)
-    # Update training and test set
-    X_measured = np.append(X_measured, X_next[None])
-    y_measured = np.append(y_measured, y_next)
-```
-See full active learning example [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/bnn_example1d.ipynb).
-    
-### Partially Bayesian Neural Nets
-PBNNs follow a similar approach, with the key difference being that a deterministic model must first be defined, along with the specification of stochastic gradient descent parameters. By default, PBNNs are trained using Maximum A Posteriori approximation, with stochastic weight averaging applied at the end of each training trajectory. This allows PBNNs to balance computational efficiency with uncertainty quantification by only treating a subset of neurons probabilistically.
-```python3
-sgd_epochs = 2000
-sgd_lr = 5e-3
-num_stochastic_layers = 1
+# Number of probabilistic ('Bayesian') layers
+num_stochastic_layers = 2
 
 # Initialize a determinsitc neural net
-net = FlaxMLP(hidden_dims=[32, 16, 8, 8], output_dim=1)
-
-# Run active learning
-for step in range(exploration_steps):
-    print('step {}'.format(step))
-    # Intitalize and train model
-    model = PartialBNN(net, num_stochastic_layers=num_stochastic_layers)
-    model.fit(X_measured, y_measured, sgd_epochs=sgd_epochs, sgd_lr=sgd_lr, sgd_batch_size=16, num_warmup=1000, num_samples=1000)
-    # Make a prediction on unmeasured points or the full domain
-    posterior_mean, posterior_var = model.predict(X_domain)
-    # Select next point to evaluate
-    next_point_idx = posterior_var.argmax(0)
-    X_next = X_domain[next_point_idx]
-    # Evaluate function in this point
-    y_next = measure(X_next)
-    # Update training and test set
-    X_measured = np.append(X_measured, X_next[None])
-    y_measured = np.append(y_measured, y_next)
+net = FlaxMLP(hidden_dims=[32, 16, 8, 4], target_dim=1)
+# Intitalize and train a PBNN model
+model = PartialBNN(net, num_stochastic_layers=num_stochastic_layers)
+model.fit(X_measured, y_measured, num_warmup=1000, num_samples=1000)
+# Make a prediction on unmeasured points or the full domain
+posterior_mean, posterior_var = model.predict(X_domain)
 ```
-See full example [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/pbnn_example1d.ipynb).
 
-### Other applications
+The obtained posterior means and variances can be used in active learning and Bayesian optimization frameworks. See example of BNN-powered active learning [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/bnn_example1d.ipynb) and example of PBNN-powered active learning [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/pbnn_example1d.ipynb).
+    
 #### Heteroskedastic noise
 By default, we assume constant observation noise across all inputs. However, this assumption often doesn't hold in real-world datasets which may exhibit input-dependent levels of noise. NeuroBayes offers heteroskedastic BNNs that can capture varying levels of noise in different regions of the data, allowing for more accurate uncertainty quantification.
 
@@ -129,7 +84,7 @@ import neurobayes as nb
 from neurobayes.flax_nets import FlaxMLP
 
 hidden_dims = [64, 32, 16, 8]
-net = FlaxMLP(hidden_dims=hidden_dims, output_dim=1)
+net = FlaxMLP(hidden_dims=hidden_dims, target_dim=1)
 detnn = nb.DeterministicNN(net, input_shape=(1,), learning_rate=5e-3, map=True, sigma=nb.utils.calculate_sigma(X1))
 detnn.train(X1, y1, epochs=5000, batch_size=None)
 ```
