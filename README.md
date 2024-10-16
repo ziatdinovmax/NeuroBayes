@@ -2,18 +2,16 @@
 
 ### *Important: This package is under active development and breaking changes are expected on weekly and sometimes even daily basis*
 
-## What is it for
 ![NB](https://github.com/user-attachments/assets/cdf07f65-6407-4d28-9fab-de5eb6424489)
 
-
+## What is it for
 Machine learning, at its core, is about approximating unknown functions – mapping inputs to outputs based on observed data. In scientific and engineering applications, this often means modeling complex relationships between process parameters and target properties. Traditionally, Gaussian Processes (GPs) have been favored in scientific computing for their ability to provide uncertainty estimates. However, GPs struggle with systems featuring discontinuities and non-stationarities, common in physical science problems, as well as with high dimensional data. **NeuroBayes** bridges this gap by combining the flexibility and scalability of neural networks with the rigorous uncertainty quantification of Bayesian methods. This repository enables the use of full BNNs and partial BNNs with the No-U-Turn Sampler for intermediate size datasets, making it a powerful tool for a wide range of scientific and engineering applications.
 
 
 ## How to use
-
 NeuroBayes provides two main approaches for implementing Bayesian Neural Networks: Fully Bayesian Neural Networks (BNN) and Partially Bayesian Neural Networks (PBNN). Both approaches currently support MLP and ConvNet architectures, with more architectures on the way. Here's how to use BNN and PBNN:
 
-#### Fully Bayesian Neural Nets
+### Fully Bayesian Neural Nets
 Fully Bayesian Neural Networks replace all constant weights in the network with probabilistic distributions. This approach provides comprehensive uncertainty quantification but may be computationally intensive for large models.
 
 ```python3
@@ -25,7 +23,7 @@ model.fit(X_measured, y_measured, num_warmup=1000, num_samples=1000)
 posterior_mean, posterior_var = model.predict(X_domain)
 ```
 
-#### Partially Bayesian Neural Network
+### Partially Bayesian Neural Network
 Partially Bayesian Neural Networks replace constant weights with probabilistic distributions only in a subset of the network's layers. This approach ismore computationally efficient while still providing good uncertainty estimates. By default, the deterministic part of PBNNs is trained using Maximum A Posteriori approximation, with stochastic weight averaging applied at the end of each training trajectory.
 
 ```python3
@@ -43,12 +41,12 @@ posterior_mean, posterior_var = model.predict(X_domain)
 
 The obtained posterior means and variances can be used in active learning and Bayesian optimization frameworks. See example of BNN-powered active learning [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/bnn_example1d.ipynb) and example of PBNN-powered active learning [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/pbnn_example1d.ipynb).
     
-#### Heteroskedastic noise
+### Heteroskedastic noise
 By default, we assume constant observation noise across all inputs. However, this assumption often doesn't hold in real-world datasets which may exhibit input-dependent levels of noise. NeuroBayes offers heteroskedastic BNNs that can capture varying levels of noise in different regions of the data, allowing for more accurate uncertainty quantification.
 
 The usage of a heteroskedastic BNN is straightforward and follows the same pattern as the standard BNN models:
 
-For fully Bayesian heteroskedastic BNN:
+For fully Bayesian heteroskedastic NN:
 ```python3
 # Initialize HeteroskedasticBNN model
 model = HeteroskedasticBNN(target_dim=1)
@@ -58,7 +56,7 @@ model.fit(X_measured, y_measured, num_warmup=2000, num_samples=2000)
 posterior_mean, posterior_var = model.predict(X_domain)
 ```
 
-For partially Bayesian heteroskedastic BNN:
+For partially Bayesian heteroskedastic NN:
 ```python3
 # Initialize model architecture
 hidden_dims = [64, 32, 16, 8, 8]
@@ -70,7 +68,7 @@ model.fit(X_measured, y_measured, sgd_epochs=5000, sgd_lr=5e-3, num_warmup=1000,
 posterior_mean, posterior_var = model.predict(X_domain)
 ```
 
-#### Pre-trained priors
+### Pre-trained priors
 NeuroBayes extends the concept of partial BNNs to leverage pre-existing knowledge or simulations, allowing for more informed priors in Bayesian Neural Networks. This approach is particularly useful when you have theoretical models or simulations that can guide the learning process for experimental data.
 The process involves two main steps:
 
