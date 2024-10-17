@@ -156,6 +156,26 @@ def get_flax_compatible_dict(params_numpyro: Dict[str, jnp.ndarray]) -> Dict[str
     return params_all
 
 
+def get_prior_means_from_samples(params_numpyro: Dict[str, jnp.ndarray]) -> Dict[str, Dict[str, jnp.ndarray]]:
+    """
+    Takes a dictionary with MCMC samples produced by numpyro
+    and creates a dictionary with mean of weights and biases
+    that can be used to set priors in BNNs
+    """
+    params_all = {}
+    weights, biases = {}, {}
+    for key, val in params_numpyro.items():
+        if key.startswith('nn'):
+            layer, param = key.split('/')[-1].split('.')
+            if param == 'bias':
+                biases[layer] = val.mean(0)
+            else:
+                weights[layer] = val.mean(0)
+    for (k, v1), (_, v2) in zip(weights.items(), biases.items()):
+        params_all[k] = {"kernel": v1, "bias": v2}
+    return params_all
+
+
 def get_init_vals_dict(nn_params):
     if jax.config.x64_enabled:
         nn_params = jax.tree_map(promote_to_x64, nn_params)
