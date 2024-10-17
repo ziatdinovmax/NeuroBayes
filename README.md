@@ -110,4 +110,8 @@ Make a prediction as ususal
 posterior_mean, posterior_var = model.predict(X_test)
 ```
 
-This approach allows you to incorporate domain knowledge or theoretical models into your Bayesian Neural Network, potentially leading to better generalization and more accurate uncertainty estimates, especially in cases where experimental data is limited. See examples [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/pretrained_priors.ipynb) (full BNN) and [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/pretrained_priors_partial.ipynb) (Partial BNN).
+This approach allows you to incorporate domain knowledge or theoretical models into your Bayesian Neural Network, potentially leading to better generalization and more accurate uncertainty estimates, especially in cases where experimental data is limited. 
+
+![pretrained_priors](https://github.com/user-attachments/assets/33f80877-4a5c-46d2-ba5d-ee540418e21b)
+
+See examples [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/pretrained_priors.ipynb) (full BNN) and [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/pretrained_priors_partial.ipynb) (Partial BNN).
