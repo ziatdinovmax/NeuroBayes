@@ -114,10 +114,10 @@ def split_convnet(model: FlaxConvNet, params: Dict[str, Any], n_layers: int = 1)
     return det_model, det_params, stoch_model, stoch_params
 
 
-def split_convnet_2head(model: FlaxConvNet2Head, params: Dict[str, Any], n_layers: int = 1):
+def split_convnet2head(model: FlaxConvNet2Head, params: Dict[str, Any], n_layers: int = 1):
     """
     Splits FlaxConvNet2Head and its weights into two parts: deterministic (conv + (optionally) deterministic MLP) and 
-    stochastic MLP layers.
+    stochastic MLP layers with two heads.
     
     Args:
         model (FlaxConvNet2Head): The original model to split
@@ -130,7 +130,7 @@ def split_convnet_2head(model: FlaxConvNet2Head, params: Dict[str, Any], n_layer
     det_fc_layers = model.fc_layers[:-n_layers] if n_layers > 0 else model.fc_layers
     stoch_fc_layers = model.fc_layers[-n_layers:] if n_layers > 0 else []
     
-    det_model = FlaxConvNet2Head(
+    det_model = FlaxConvNet(
         input_dim=model.input_dim,
         conv_layers=model.conv_layers,
         fc_layers=det_fc_layers,
@@ -156,17 +156,17 @@ def split_convnet_2head(model: FlaxConvNet2Head, params: Dict[str, Any], n_layer
             det_mlp_params = {}
             stoch_mlp_params = {}
             for layer_key, layer_val in mlp_params.items():
-                if layer_key.startswith('Dense'):
+                if layer_key in ['MeanHead', 'VarianceHead']:
+                    stoch_mlp_params[layer_key] = layer_val
+                else:
                     layer_num = int(layer_key[5:])  # Extract number from 'DenseX'
                     if layer_num < len(det_fc_layers):
                         det_mlp_params[layer_key] = layer_val
                     else:
                         new_key = f"Dense{layer_num - len(det_fc_layers)}"
                         stoch_mlp_params[new_key] = layer_val
-                elif layer_key in ['mean', 'var']:
-                    stoch_mlp_params[layer_key] = layer_val
             if det_mlp_params:
-                det_params['FlaxMLP2Head_0'] = det_mlp_params
+                det_params['FlaxMLP_0'] = det_mlp_params
             if stoch_mlp_params:
                 stoch_params = stoch_mlp_params
 
