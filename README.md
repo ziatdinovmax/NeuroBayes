@@ -2,8 +2,7 @@
 
 ### *Important: This package is under active development and breaking changes are expected on weekly and sometimes even daily basis*
 
-![NB2](https://github.com/user-attachments/assets/a04dbe15-5c27-4524-80b7-9e9556dc2811)
-
+![NB2](https://github.com/user-attachments/assets/a78fbcac-23e5-4073-afbd-d424a8f7d2dc)
 
 ## What is it for
 Machine learning, at its core, is about approximating unknown functions – mapping inputs to outputs based on observed data. In scientific and engineering applications, this often means modeling complex relationships between process parameters and target properties. Traditionally, Gaussian Processes (GPs) have been favored in these domains for their ability to provide robust uncertainty estimates. However, GPs struggle with systems featuring discontinuities and non-stationarities, common in physical science problems, as well as with high dimensional data. **NeuroBayes** bridges this gap by combining the flexibility and scalability of neural networks with the rigorous uncertainty quantification of Bayesian methods. This repository enables the use of full BNNs and partial BNNs with the No-U-Turn Sampler for intermediate size datasets, making it a powerful tool for a wide range of scientific and engineering applications.
