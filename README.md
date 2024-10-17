@@ -70,6 +70,8 @@ model.fit(X_measured, y_measured, sgd_epochs=5000, sgd_lr=5e-3, num_warmup=1000,
 posterior_mean, posterior_var = model.predict(X_domain)
 ```
 
+![hsk](https://github.com/user-attachments/assets/733e653d-8e52-4be7-936b-d61ea69849b7)
+
 See example [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/heteroskedastic.ipynb).
 
 ### Pre-trained priors
