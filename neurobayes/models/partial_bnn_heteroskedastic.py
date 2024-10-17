@@ -7,22 +7,34 @@ import flax
 
 from .bnn_heteroskedastic import HeteroskedasticBNN
 from ..flax_nets import DeterministicNN
-from ..flax_nets import split_mlp2head
+from ..flax_nets import FlaxMLP2Head, FlaxConvNet2Head, split_mlp2head, split_convnet2head
 
 
 class HeteroskedasticPartialBNN(HeteroskedasticBNN):
     """
     Heteroskedastic Partially Bayesian Neural Network
     """
+     # Dictionary mapping network types to their corresponding splitter functions
+    SPLITTERS = {
+        FlaxMLP2Head: split_mlp2head,
+        FlaxConvNet2Head: split_convnet2head,
+        # Add more network types and their splitters here
+    }
     def __init__(self,
                  deterministic_nn: Type[flax.linen.Module],
                  deterministic_weights: Optional[Dict[str, jnp.ndarray]] = None,
                  num_stochastic_layers: int = 1
                  ) -> None:
-        super().__init__(None, None)
+        super().__init__(None)
+
+        self.nn_type = type(deterministic_nn)
+        if self.nn_type not in self.SPLITTERS:
+            raise ValueError(f"Unsupported network type: {self.nn_type}")
+        self.splitter = self.SPLITTERS[self.nn_type]
+
         if deterministic_weights:
             (self.subnet1, self.subnet1_params,
-                self.subnet2, self.subnet2_params) = split_mlp2head(
+                self.subnet2, self.subnet2_params) = self.splitter(
                     deterministic_nn, deterministic_weights)
         else:
             self.untrained_deterministic_nn = deterministic_nn
@@ -109,7 +121,7 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
                 swa_epochs=sgd_wa_epochs, sigma=map_sigma)
             det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs, sgd_batch_size)
             (self.subnet1, self.subnet1_params,
-                self.subnet2, self.subnet2_params) = split_mlp2head(
+                self.subnet2, self.subnet2_params) = self.splitter(
                     det_nn.model, det_nn.state.params,
                 self.num_stochastic_layers)
             print("Training partially Bayesian NN")
