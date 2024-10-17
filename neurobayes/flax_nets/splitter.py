@@ -9,15 +9,15 @@ def split_mlp(model, params, n_layers: int = 1, out_dim: int = None):
     Splits MLP and its weights into two sub-networks: one with last n layers
     (+ output layer) removed and another one consisting only of those n layers.
     """
-    out_dim = out_dim if out_dim is not None else model.output_dim  # there will be a mismatch in last_layer_params if out_dim != model.output_dim
+    out_dim = out_dim if out_dim is not None else model.target_dim  # there will be a mismatch in last_layer_params if out_dim != model.target_dim
 
 
     subnet1 = FlaxMLP(
         model.hidden_dims[:-n_layers] if n_layers > 0 else model.hidden_dims,
-        output_dim=0, activation=model.activation)
+        target_dim=0, activation=model.activation)
     subnet2 = FlaxMLP(
         model.hidden_dims[-n_layers:] if n_layers > 0 else [],
-        output_dim=out_dim, activation=model.activation)
+        target_dim=out_dim, activation=model.activation)
 
     subnet1_params = {}
     subnet2_params = {}
@@ -37,10 +37,10 @@ def split_mlp2head(model, params, n_layers: int = 1, out_dim: int = None):
     Splits MLP2Head and its weights into two sub-networks: one with last n layers
     (+ output heads) removed and another one consisting of those n layers and the output heads.
     """
-    out_dim = out_dim if out_dim is not None else model.output_dim
+    out_dim = out_dim if out_dim is not None else model.target_dim
 
-    subnet1 = FlaxMLP(model.hidden_dims[:-n_layers], output_dim=0, activation=model.activation)
-    subnet2 = FlaxMLP2Head(model.hidden_dims[-n_layers:], output_dim=out_dim, activation=model.activation)
+    subnet1 = FlaxMLP(model.hidden_dims[:-n_layers], target_dim=0, activation=model.activation)
+    subnet2 = FlaxMLP2Head(model.hidden_dims[-n_layers:], target_dim=out_dim, activation=model.activation)
 
     subnet1_params = {}
     subnet2_params = {}
@@ -78,14 +78,14 @@ def split_convnet(model: FlaxConvNet, params: Dict[str, Any], n_layers: int = 1)
         input_dim=model.input_dim,
         conv_layers=model.conv_layers,
         fc_layers=det_fc_layers,
-        output_dim=0,  # No output layer in deterministic part
+        target_dim=0,  # No output layer in deterministic part
         activation=model.activation,
         kernel_size=model.kernel_size
     )
     
     stoch_model = FlaxMLP(
         hidden_dims=stoch_fc_layers,
-        output_dim=model.output_dim,
+        target_dim=model.target_dim,
         activation=model.activation
     )
 
@@ -134,14 +134,14 @@ def split_convnet2head(model: FlaxConvNet2Head, params: Dict[str, Any], n_layers
         input_dim=model.input_dim,
         conv_layers=model.conv_layers,
         fc_layers=det_fc_layers,
-        output_dim=0,  # No output layer in deterministic part
+        target_dim=0,  # No output layer in deterministic part
         activation=model.activation,
         kernel_size=model.kernel_size
     )
     
     stoch_model = FlaxMLP2Head(
         hidden_dims=stoch_fc_layers,
-        output_dim=model.output_dim,
+        target_dim=model.target_dim,
         activation=model.activation
     )
 

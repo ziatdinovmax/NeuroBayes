@@ -6,7 +6,7 @@ import flax.linen as nn
 class FlaxMLP(nn.Module):
     # Define the structure of the network
     hidden_dims: Sequence[int]  # List of hidden layer sizes
-    output_dim: int             # Number of units in the output layer
+    target_dim: int             # Number of units in the output layer
     activation: str = 'tanh'    # Type of activation function, default is 'tanh'
 
     @nn.compact
@@ -23,9 +23,9 @@ class FlaxMLP(nn.Module):
             x = activation_fn(x)  # Apply activation function
 
         # Output layer, no activation function applied here
-        if self.output_dim:
+        if self.target_dim:
             x = nn.Dense(
-                features=self.output_dim,
+                features=self.target_dim,
                 name=f"Dense{len(self.hidden_dims)}")(x)
 
         return x
@@ -34,7 +34,7 @@ class FlaxMLP(nn.Module):
 class FlaxMLP2Head(nn.Module):
     # Define the structure of the network
     hidden_dims: Sequence[int]  # List of hidden layer sizes
-    output_dim: int             # Number of units in each output layer
+    target_dim: int             # Number of units in each output layer
     activation: str = 'tanh'    # Type of activation function, default is 'tanh'
 
     @nn.compact
@@ -51,10 +51,10 @@ class FlaxMLP2Head(nn.Module):
             x = activation_fn(x)  # Apply activation function
 
         # Mean head
-        mean = nn.Dense(features=self.output_dim, name="MeanHead")(x)
+        mean = nn.Dense(features=self.target_dim, name="MeanHead")(x)
 
         # Variance head
-        variance = nn.Dense(features=self.output_dim, name="VarianceHead")(x)
+        variance = nn.Dense(features=self.target_dim, name="VarianceHead")(x)
         variance = nn.softplus(variance)
 
         return mean, variance
