@@ -39,7 +39,7 @@ model.fit(X_measured, y_measured, num_warmup=1000, num_samples=1000)
 posterior_mean, posterior_var = model.predict(X_domain)
 ```
 
-![BNN_PBNN](https://github.com/user-attachments/assets/af377d84-3a57-4d4c-9880-fe3ca931bcf9)
+![BNN_PBNN](https://github.com/user-attachments/assets/8281b071-4f05-4432-8e23-babcaaad6b5d)
 
 The obtained posterior means and variances can be used in active learning and Bayesian optimization frameworks. See example of BNN-powered active learning [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/bnn_example1d.ipynb) and example of PBNN-powered active learning [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/pbnn_example1d.ipynb).
     
