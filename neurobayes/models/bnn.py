@@ -186,34 +186,6 @@ class BNN:
         )
         return predictive(rng_key, X_new)
 
-    # def predict_in_batches(self, X_new: jnp.ndarray,
-    #                        batch_size: int = 100,
-    #                        device: Optional[str] = None,
-    #                        rng_key: Optional[jnp.ndarray] = None
-    #                        ) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    #     """
-    #     Make prediction in batches (to avoid memory overflow)
-    #     at X_new points a trained BNN model
-    #     """
-    #     X_new = self.set_data(X_new)
-    #     if rng_key is None:
-    #         rng_key = jra.PRNGKey(0)
-    #     samples = self.get_samples(chain_dim=False)
-    #     X_new, samples = put_on_device(device, X_new, samples)
-    #     mu_chunks, y_chunks = [], []
-    #     for batch in split_dict(samples, batch_size):
-    #         predictions = self.sample_from_posterior(
-    #             rng_key, X_new, batch, return_sites=['mu', 'y']).values()
-    #         mu_i, y_i = predictions["mu"], predictions["y"]
-    #         mu_i = jax.device_put(mu_i, jax.devices("cpu")[0])
-    #         y_i = jax.device_put(y_i, jax.devices("cpu")[0])
-    #         mu_chunks.append(mu_i)
-    #         y_chunks.append(y_i)
-    #     mu_chunks = jnp.concatenate(mu_chunks, axis=0)
-    #     y_chunks = jnp.concatenate(y_chunks, axis=0)
-        
-    #     return mu_chunks.mean(0), y_chunks.var(0)
-
     def set_data(self, X: jnp.ndarray, y: Optional[jnp.ndarray] = None
                  ) -> Union[Tuple[jnp.ndarray], jnp.ndarray]:
         X = X if X.ndim > 1 else X[:, None]
