@@ -9,7 +9,7 @@ class FlaxConvNet(nn.Module):
     input_dim: int
     conv_layers: Sequence[int]
     fc_layers: Sequence[int]
-    output_dim: int
+    target_dim: int
     activation: str = 'tanh'
     kernel_size: Union[int, Tuple[int, ...]] = 3
 
@@ -30,7 +30,7 @@ class FlaxConvNet(nn.Module):
         # Use FlaxMLP for fully connected layers
         x = FlaxMLP(
             hidden_dims=self.fc_layers,
-            output_dim=self.output_dim,
+            target_dim=self.target_dim,
             activation=self.activation)(x)
 
         return x
@@ -41,7 +41,7 @@ class FlaxConvNet2Head(nn.Module):
     input_dim: int
     conv_layers: Sequence[int]
     fc_layers: Sequence[int]
-    output_dim: int
+    target_dim: int
     activation: str = 'tanh'
     kernel_size: Union[int, Tuple[int, ...]] = 3
 
@@ -61,7 +61,7 @@ class FlaxConvNet2Head(nn.Module):
 
         mean, var = FlaxMLP2Head(
             hidden_dims=self.fc_layers,
-            output_dim=self.output_dim,
+            target_dim=self.target_dim,
             activation=self.activation)(x)
         
         return mean, var
