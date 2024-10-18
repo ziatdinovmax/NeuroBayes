@@ -15,8 +15,10 @@ NeuroBayes provides two main approaches for implementing Bayesian Neural Network
 Fully Bayesian Neural Networks replace all constant weights in the network with probabilistic distributions. This approach provides comprehensive uncertainty quantification but may be computationally intensive for large models.
 
 ```python3
+import neurobayes as nb
+
 # Initialize model
-model = BNN(target_dim=1, hidden_dim=[32, 16, 8, 4])
+model = nb.BNN(target_dim=1, hidden_dim=[32, 16, 8, 4])
 # Train model
 model.fit(X_measured, y_measured, num_warmup=1000, num_samples=1000)
 # Make a prediction on full domain
@@ -31,9 +33,9 @@ Partially Bayesian Neural Networks replace constant weights with probabilistic d
 num_stochastic_layers = 2
 
 # Initialize a determinsitc neural net
-net = FlaxMLP(hidden_dims=[32, 16, 8, 4], target_dim=1)
+net = nb.FlaxMLP(hidden_dims=[32, 16, 8, 4], target_dim=1)
 # Intitalize and train a PBNN model
-model = PartialBNN(net, num_stochastic_layers=num_stochastic_layers)
+model = nb.PartialBNN(net, num_stochastic_layers=num_stochastic_layers)
 model.fit(X_measured, y_measured, num_warmup=1000, num_samples=1000)
 # Make a prediction on unmeasured points or the full domain
 posterior_mean, posterior_var = model.predict(X_domain)
@@ -51,7 +53,7 @@ The usage of a heteroskedastic BNN is straightforward and follows the same patte
 For fully Bayesian heteroskedastic NN:
 ```python3
 # Initialize HeteroskedasticBNN model
-model = HeteroskedasticBNN(target_dim=1)
+model = nb.HeteroskedasticBNN(target_dim=1)
 # Train
 model.fit(X_measured, y_measured, num_warmup=2000, num_samples=2000)
 # Make a prediction
@@ -62,9 +64,9 @@ For partially Bayesian heteroskedastic NN:
 ```python3
 # Initialize model architecture
 hidden_dims = [64, 32, 16, 8, 8]
-net = FlaxMLP2Head(hidden_dims, 1)
+net = nb.FlaxMLP2Head(hidden_dims, 1)
 # Pass it to HeteroskedasticPartialBNN module and perform training
-model = HeteroskedasticPartialBNN(net, num_stochastic_layers=2)
+model = nb.HeteroskedasticPartialBNN(net, num_stochastic_layers=2)
 model.fit(X_measured, y_measured, sgd_epochs=5000, sgd_lr=5e-3, num_warmup=1000, num_samples=1000)
 # Make a prediction
 posterior_mean, posterior_var = model.predict(X_domain)
@@ -84,11 +86,8 @@ Using the weights from this pre-trained network to center the prior distribution
 Here's how to implement this approach:
 First, fit a deterministic NN to theoretical data:
 ```python3
-import neurobayes as nb
-from neurobayes.flax_nets import FlaxMLP
-
 hidden_dims = [64, 32, 16, 8]
-net = FlaxMLP(hidden_dims=hidden_dims, target_dim=1)
+net = nb.FlaxMLP(hidden_dims, target_dim=1)
 detnn = nb.DeterministicNN(net, input_shape=(1,), learning_rate=5e-3, map=True, sigma=nb.utils.calculate_sigma(X1))
 detnn.train(X1, y1, epochs=5000, batch_size=None)
 ```
