@@ -14,14 +14,27 @@ from ..utils.utils import put_on_device, split_dict
 
 class BNN:
     """
-    A Fully Bayesian Neural Network.
-    This approach employs a probabilistic treatment of all neural network weights,
-    treating them as random variables with specified prior distributions
-    and utilizing advanced Markov Chain Monte Carlo techniques to sample directly
-    from the posterior distribution, allowing to account for all plausible weight configurations.
-    This approach enables the network to make probabilistic predictions,
-    not just single-point estimates but entire distributions of possible outcomes,
-    quantifying the inherent uncertainty.
+    A Fully Bayesian Neural Network (BNN).
+
+    This model treats the weights in a neural network as probabilistic distributions and utilizes 
+    the No-U-Turn Sampler to sample directly from the posterior distribution. This approach allows 
+    the BNN to account for all plausible weight configurations, enabling it to make probabilistic 
+    predictions. Instead of single-point estimates, it provides entire distributions of possible 
+    outcomes, thus quantifying the inherent uncertainty.
+
+    Args:
+        target_dim (int): Dimensionality of the outputs/targets. For example, if predicting a 
+            single scalar property, set target_dim=1.
+        hidden_dim (List[int], optional): List specifying the number of hidden units in each layer 
+            of the neural network architecture. Defaults to [32, 16, 8].
+        conv_layers (List[int], optional): List specifying the number of filters in each 
+            convolutional layer. If provided, enables a ConvNet architecture with max pooling 
+            between each conv layer.
+        input_dim (int, optional): Input dimensionality (between 1 and 3). Required only for 
+            ConvNet architecture.
+        activation (str, optional): Non-linear activation function to use. Defaults to 'tanh'.
+        noise_prior (dist.Distribution, optional): Prior probability distribution over 
+            observational noise. Defaults to HalfNormal(1.0).
     """
     def __init__(self,
                  target_dim: int,
@@ -47,7 +60,7 @@ class BNN:
               pretrained_priors: Dict = None,
               priors_sigma: float = 1.0,
               **kwargs) -> None:
-        """BNN probabilistic model"""
+        """BNN model"""
         
         def prior(name, shape):
             if pretrained_priors is not None:
@@ -78,33 +91,41 @@ class BNN:
             num_chains: int = 1, chain_method: str = 'sequential',
             pretrained_priors: Optional[Dict[str, Dict[str, jnp.ndarray]]] = None,
             priors_sigma: Optional[float] = 1.0,
-            progress_bar: bool = True, device: str = None,
+            progress_bar: bool = True, device: Optional[str] = None,
             rng_key: Optional[jnp.array] = None,
-            extra_fields: Optional[Tuple[str]] = (),
+            extra_fields: Optional[Tuple[str, ...]] = (),
             ) -> None:
         """
-        Run HMC to infer parameters of the BNN
+        Run No-U-Turn Sampler (NUTS) to infer parameters of the Bayesian Neural Network.
 
         Args:
-            X:
-                2D feature vector of shape(n_samples, n_features) for MLP or
-                N-D input of shape (n_samples, *dims, n_channels) for convnet where
-                dims = (length,) for spectral data and dims = (height, width) for image data
-            y: 1D target vector
-            num_warmup: number of HMC warmup states
-            num_samples: number of HMC samples
-            num_chains: number of HMC chains
-            chain_method: 'sequential', 'parallel' or 'vectorized'
-            progress_bar: show progress bar
-            device:
-                The device (e.g. "cpu" or "gpu") perform computation on ('cpu', 'gpu'). If None, computation
-                is performed on the JAX default device.
-            rng_key: random number generator key
-            pretrained_priors: Dictionary with mean values for Normal prior distributions over model weights and biases
-            priors_sigma: Standard deviation for default or pretrained priors (defaults to 1.0)
-            extra_fields:
-                Extra fields (e.g. 'accept_prob') to collect during the HMC run.
-                The extra fields are accessible from model.mcmc.get_extra_fields() after model training.
+            X (jnp.ndarray): Input features. For MLP: 2D array of shape (n_samples, n_features).
+                For ConvNet: N-D array of shape (n_samples, *dims, n_channels), where
+                dims = (length,) for spectral data or (height, width) for image data.
+            y (jnp.ndarray): Target array. For single-output problems: 1D array of shape (n_samples,).
+                For multi-output problems: 2D array of shape (n_samples, target_dim).
+            num_warmup (int, optional): Number of NUTS warmup steps. Defaults to 2000.
+            num_samples (int, optional): Number of NUTS samples to draw. Defaults to 2000.
+            num_chains (int, optional): Number of NUTS chains to run. Defaults to 1.
+            chain_method (str, optional): Method for running chains: 'sequential', 'parallel', 
+                or 'vectorized'. Defaults to 'sequential'.
+            pretrained_priors (Dict[str, Dict[str, jnp.ndarray]], optional): Dictionary with mean 
+                values for Normal prior distributions over model weights and biases.
+            priors_sigma (float, optional): Standard deviation for default or pretrained priors. 
+                Defaults to 1.0.
+            progress_bar (bool, optional): Whether to show a progress bar. Defaults to True.
+            device (str, optional): The device to perform computation on ('cpu', 'gpu'). 
+                If None, uses the JAX default device.
+            rng_key (jnp.ndarray, optional): Random number generator key. If None, uses a default key.
+            extra_fields (Tuple[str, ...], optional): Extra fields (e.g. 'accept_prob') to collect 
+                during the NUTS run. Accessible via model.mcmc.get_extra_fields() after training.
+
+        Returns:
+            None: The method updates the model's internal state but does not return a value.
+
+        Note:
+            After running this method, the MCMC samples are stored in the `mcmc` attribute
+            of the model and can be accessed via .get_samples() method for further analysis.
         """
         key = rng_key if rng_key is not None else jra.PRNGKey(0)
         X, y = self.set_data(X, y)
@@ -126,15 +147,15 @@ class BNN:
             pretrained_priors, priors_sigma,
             extra_fields=extra_fields)
 
-    def get_samples(self, chain_dim: bool = False) -> Dict[str, jnp.ndarray]:
-        """Get posterior samples (after running the MCMC chains)"""
-        return self.mcmc.get_samples(group_by_chain=chain_dim)
-
     def sample_noise(self) -> jnp.ndarray:
         """
         Sample observational noise variance
         """
         return numpyro.sample("sig", self.noise_prior)
+    
+    def get_samples(self, chain_dim: bool = False) -> Dict[str, jnp.ndarray]:
+        """Get posterior samples (after running the MCMC chains)"""
+        return self.mcmc.get_samples(group_by_chain=chain_dim)
 
     def predict(self,
                 X_new: jnp.ndarray,
@@ -146,18 +167,23 @@ class BNN:
         Predict the mean and variance of the target values for new inputs.
 
         Args:
-            X_new:
-                New input data for predictions.
-            samples:
-                Dictionary of posterior samples with inferred model parameters (weights and biases)
-            device:
-                The device (e.g. "cpu" or "gpu") perform computation on ('cpu', 'gpu'). If None, computation
-                is performed on the JAX default device.
-            rng_key:
-                Random number generator key for JAX operations.
+            X_new (jnp.ndarray): New input data for predictions. Should have the same structure
+                as the training input X: 2D array of shape (n_samples, n_features) for MLP, or
+                N-D array of shape (n_samples, *dims, n_channels) for ConvNet.
+            samples (Dict[str, jnp.ndarray], optional): Dictionary of posterior samples with 
+                inferred model parameters (weights and biases). Uses samples from 
+                the last MCMC run by default.
+            device (str, optional): The device to perform computation on ('cpu', 'gpu'). 
+                If None, uses the JAX default device.
+            rng_key (jnp.ndarray, optional): Random number generator key for JAX operations. 
+                If None, a default key is used.
 
         Returns:
-            Tuple containing the means and samples from the posterior predictive distribution.
+            Tuple[jnp.ndarray, jnp.ndarray]: A tuple containing:
+                - posterior_mean (jnp.ndarray): Mean of the posterior predictive distribution.
+                Shape: (n_samples, target_dim).
+                - posterior_var (jnp.ndarray): Variance of the posterior predictive distribution.
+                Shape: (n_samples, target_dim).
         """
         X_new = self.set_data(X_new)
 
@@ -179,7 +205,7 @@ class BNN:
                               samples: Dict[str, jnp.ndarray],
                               return_sites: Optional[List[str]] = None
                               ) -> jnp.ndarray:
-   
+        """Sample from posterior distribution at new inputs X_new"""
         predictive = Predictive(
             self.model, samples,
             return_sites=return_sites
