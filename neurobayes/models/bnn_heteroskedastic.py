@@ -13,7 +13,19 @@ from ..utils.utils import put_on_device
 
 class HeteroskedasticBNN(BNN):
     """
-    Heteroskedastic Bayesian Neural Net
+    Heteroskedastic Bayesian Neural Network for input-dependent observational noise
+
+    Args:
+        target_dim (int): Dimensionality of the outputs/targets. For example, if predicting a 
+            single scalar property, set target_dim=1.
+        hidden_dim (List[int], optional): List specifying the number of hidden units in each layer 
+            of the neural network architecture. Defaults to [32, 16, 8].
+        conv_layers (List[int], optional): List specifying the number of filters in each 
+            convolutional layer. If provided, enables a ConvNet architecture with max pooling 
+            between each conv layer.
+        input_dim (int, optional): Input dimensionality (between 1 and 3). Required only for 
+            ConvNet architecture.
+        activation (str, optional): Non-linear activation function to use. Defaults to 'tanh'.
     """
     def __init__(self,
                  target_dim: int,
@@ -38,7 +50,7 @@ class HeteroskedasticBNN(BNN):
               pretrained_priors: Dict = None,
               priors_sigma: float = 1.0,
               **kwargs) -> None:
-        """Heteroskedastic BNN probabilistic model"""
+        """Heteroskedastic BNN model"""
 
         def prior(name, shape):
             if pretrained_priors is not None:
@@ -66,6 +78,7 @@ class HeteroskedasticBNN(BNN):
 
     def predict_noise(self, X_new: jnp.ndarray,
                       device: Optional[str] = None) -> jnp.ndarray:
+        """Predict likely values of noise for new data"""
         X_new = self.set_data(X_new)
         samples = self.get_samples()
         X_new, samples = put_on_device(device, X_new, samples)
