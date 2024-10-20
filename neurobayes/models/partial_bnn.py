@@ -20,12 +20,10 @@ class PartialBNN(BNN):
         deterministic_weights:
             Pre-trained deterministic weights, If not provided,
             the deterministic_nn will be trained from scratch when running .fit() method
-        input_dim:
-            Number of features in the input data (for MLP) or number of dimensions (for ConvNet)
         num_stochastic_layers:
-            Number of layers at the end of deterministic_nn to be treated as fully stochastic (Bayesian)
+            Number of layers at the end of deterministic_nn to be treated as fully stochastic ('Bayesian')
         noise_prior:
-            Custom prior on observational noise distribution
+            Custom prior for observational noise distribution
     """
     # Dictionary mapping network types to their corresponding splitter functions
     SPLITTERS = {
@@ -98,37 +96,38 @@ class PartialBNN(BNN):
             map_sigma: float = 1.0, priors_from_map: bool = False, priors_sigma: float = 1.0,
             progress_bar: bool = True, device: str = None,
             rng_key: Optional[jnp.array] = None,
-            extra_fields: Optional[Tuple[str]] = ()
+            extra_fields: Optional[Tuple[str, ...]] = ()
             ) -> None:
         """
-        Run HMC to infer parameters of the BNN
+        Infer parameters of the partial BNN
 
         Args:
-            X: 2D feature vector
-            y: 1D target vector
-            num_warmup: number of HMC warmup states
-            num_samples: number of HMC samples
-            num_chains: number of HMC chains
-            chain_method: choose between 'sequential', 'vectorized', and 'parallel'
-            sgd_swa_epochs:
-                number of SGD training epochs for deterministic NN
-                (if trained weights are not provided at the initialization stage)
-            sgd_lr: SGD learning rate (if trained weights are not provided at the initialization stage)
-            sgd_batch_size:
-                Batch size for SGD training (if trained weights are not provided at the initialization stage).
-                Defaults to None, meaning that an entire dataset is passed through an NN.
-            sgd_wa_epochs: Number of epochs for stochastic weight averaging at the end of SGD training trajectory (defautls to 10)
-            map_sigma: sigma in gaussian prior for regularized SGD training
-            priors_from_map: use MAP values to initialize BNN weight priors (Defaults to False)
-            priors_sigma: Standard deviation for default or pretrained priors (defaults to 1.0)
-            progress_bar: show progress bar
-            device:
-                The device (e.g. "cpu" or "gpu") perform computation on ('cpu', 'gpu'). If None, computation
-                is performed on the JAX default device.
-            rng_key: random number generator key
-            extra_fields:
-                Extra fields (e.g. 'accept_prob') to collect during the HMC run.
-                The extra fields are accessible from model.mcmc.get_extra_fields() after model training.
+            X (jnp.ndarray): Input features. For MLP: 2D array of shape (n_samples, n_features).
+                For ConvNet: N-D array of shape (n_samples, *dims, n_channels), where
+                dims = (length,) for spectral data or (height, width) for image data.
+            y (jnp.ndarray): Target array. For single-output problems: 1D array of shape (n_samples,).
+                For multi-output problems: 2D array of shape (n_samples, target_dim).
+            num_warmup (int, optional): Number of NUTS warmup steps. Defaults to 2000.
+            num_samples (int, optional): Number of NUTS samples to draw. Defaults to 2000.
+            num_chains (int, optional): Number of NUTS chains to run. Defaults to 1.
+            chain_method (str, optional): Method for running chains: 'sequential', 'parallel', 
+                or 'vectorized'. Defaults to 'sequential'.
+            sgd_epochs (Optional[int], optional): Number of SGD training epochs for deterministic NN.
+                Defaults to 500 (if no pretrained weights are provided).
+            sgd_lr (float, optional): SGD learning rate. Defaults to 0.01.
+            sgd_batch_size (Optional[int], optional): Mini-batch size for SGD training. 
+                Defaults to None (all input data is processed as a single batch).
+            sgd_wa_epochs (int, optional): Number of epochs for stochastic weight averaging. Defaults to 10.
+            map_sigma (float, optional): Sigma in Gaussian prior for regularized SGD training. Defaults to 1.0.
+            priors_from_map (bool, optional): Use MAP values to initialize BNN weight priors. Defaults to False.
+            priors_sigma (float, optional): Standard deviation for default or pretrained priors
+                in the Bayesian part of the NN. Defaults to 1.0.
+            progress_bar (bool, optional): Show progress bar. Defaults to True.
+            device (Optional[str], optional): The device to perform computation on ('cpu', 'gpu'). 
+                Defaults to None (JAX default device).
+            rng_key (Optional[jnp.ndarray], optional): Random number generator key. Defaults to None.
+            extra_fields (Optional[Tuple[str, ...]], optional): Extra fields to collect during the MCMC run. 
+                Defaults to ().
         """
         if hasattr(self, "untrained_deterministic_nn"):
             print("Training deterministic NN...")

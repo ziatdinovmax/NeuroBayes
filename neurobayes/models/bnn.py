@@ -118,7 +118,7 @@ class BNN:
                 If None, uses the JAX default device.
             rng_key (jnp.ndarray, optional): Random number generator key. If None, uses a default key.
             extra_fields (Tuple[str, ...], optional): Extra fields (e.g. 'accept_prob') to collect 
-                during the NUTS run. Accessible via model.mcmc.get_extra_fields() after training.
+                during the MCMC run. Accessible via model.mcmc.get_extra_fields() after training.
 
         Returns:
             None: The method updates the model's internal state but does not return a value.
