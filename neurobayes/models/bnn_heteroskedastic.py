@@ -16,7 +16,7 @@ class HeteroskedasticBNN(BNN):
     Heteroskedastic Bayesian Neural Network for input-dependent observational noise
 
     Args:
-        target_dim (int): Dimensionality of the outputs/targets. For example, if predicting a 
+        target_dim (int): Dimensionality of the target variable. For example, if predicting a 
             single scalar property, set target_dim=1.
         hidden_dim (List[int], optional): List specifying the number of hidden units in each layer 
             of the neural network architecture. Defaults to [32, 16, 8].
