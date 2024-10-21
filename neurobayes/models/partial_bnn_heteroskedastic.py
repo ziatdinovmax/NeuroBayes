@@ -18,7 +18,7 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
     SPLITTERS = {
         FlaxMLP2Head: split_mlp2head,
         FlaxConvNet2Head: split_convnet2head,
-        # Add more network types and their splitters here
+        # More network types and their splitters TBA
     }
     def __init__(self,
                  deterministic_nn: Type[flax.linen.Module],

@@ -29,7 +29,7 @@ class PartialBNN(BNN):
     SPLITTERS = {
         FlaxMLP: split_mlp,
         FlaxConvNet: split_convnet,
-        # Add more network types and their splitters here
+        # More network types and their splitters TBA
     }
 
     def __init__(self,

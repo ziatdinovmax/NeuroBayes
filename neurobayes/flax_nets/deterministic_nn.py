@@ -16,8 +16,7 @@ class TrainState(train_state.TrainState):
 class DeterministicNN:
 
     """
-    Class for training and predicting with deterministic (as in non-stochastic)
-    neural network.
+    Class for training and predicting with deterministic neural network.
 
     Args:
         architecture: a Flax model
