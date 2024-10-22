@@ -142,7 +142,7 @@ class PartialBNN2(BNN):
             print("Training deterministic NN...")
             X, y = self.set_data(X, y)
             det_nn = DeterministicNN(
-                self.untrained_deterministic_nn,
+                self.deterministic_nn,
                 input_shape = X.shape[1:] if X.ndim > 2 else (X.shape[-1],), # different input shape for ConvNet and MLP
                 learning_rate=sgd_lr, swa_epochs=sgd_wa_epochs, sigma=map_sigma)
             det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs, sgd_batch_size)
