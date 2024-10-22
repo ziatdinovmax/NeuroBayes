@@ -45,10 +45,11 @@ def extract_mlp_configs(
 class MLPLayerModule(nn.Module):
     features: int
     activation: Any = None
+    layer_name: str = 'dense'
     
     @nn.compact
     def __call__(self, x):
-        x = nn.Dense(features=self.features, name='dense')(x)
+        x = nn.Dense(features=self.features, name=self.layer_name)(x)
         if self.activation is not None:
             x = self.activation(x)
         return x
