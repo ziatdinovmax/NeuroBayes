@@ -1,6 +1,5 @@
-from typing import Dict, Optional, Type, Tuple, Union, Callable
+from typing import Dict, Optional, Type, Tuple, Union, List
 import jax.numpy as jnp
-import flax
 
 import numpyro
 import numpyro.distributions as dist
@@ -23,63 +22,44 @@ class PartialBNN2(BNN):
             the deterministic_nn will be trained from scratch when running .fit() method
         num_stochastic_layers:
             Number of layers at the end of deterministic_nn to be treated as fully stochastic ('Bayesian')
+        stochastic_layer_names:
+            Names of neural network modules to be treated probabilistically
         noise_prior:
             Custom prior for observational noise distribution
     """
-    # Dictionary mapping network types to their corresponding splitter functions
-    SPLITTERS = {
-        FlaxMLP: split_mlp,
-        FlaxConvNet: split_convnet,
-        # More network types and their splitters TBA
-    }
 
     def __init__(self,
                  deterministic_nn: Union[Type[FlaxMLP], Type[FlaxConvNet]],
                  deterministic_weights: Optional[Dict[str, jnp.ndarray]] = None,
                  num_stochastic_layers: int = 1,
+                 stochastic_layer_names: List[str] = None,
                  noise_prior: Optional[dist.Distribution] = None
                  ) -> None:
         super().__init__(None, noise_prior=noise_prior)
         
-        # self.nn_type = type(deterministic_nn)
-        # if self.nn_type not in self.SPLITTERS:
-        #     raise ValueError(f"Unsupported network type: {self.nn_type}")
-        # self.splitter = self.SPLITTERS[self.nn_type]
-        
-        # if deterministic_weights:
-        #     (self.subnet1, self.subnet1_params,
-        #      self.subnet2, self.subnet2_params) = self.splitter(
-        #          deterministic_nn, deterministic_weights,
-        #          num_stochastic_layers)
-        # else:
-        #     self.untrained_deterministic_nn = deterministic_nn
-        #     self.num_stochastic_layers = num_stochastic_layers
-
         self.deterministic_nn = deterministic_nn
         self.deterministic_weights = deterministic_weights
+
+        self.probabilistic_layers = stochastic_layer_names
     
     def model(self,
           X: jnp.ndarray,
           y: jnp.ndarray = None,
-          pretrained_priors: bool = None,
           priors_sigma: float = 1.0,
           **kwargs) -> None:
         """Partial BNN model"""
     
-        probabilistic_layers = ["Dense2", "Dense3", "Dense4"]
-        mlp = self.deterministic_nn
+        net = self.deterministic_nn
         pretrained_priors = self.deterministic_weights
 
         # Extract layer configurations
-        layer_configs = extract_mlp_configs(mlp, probabilistic_layers)
+        layer_configs = extract_mlp_configs(net, self.probabilistic_layers)
         
         def prior(name, shape):
-            if pretrained_priors is not None:
-                param_path = name.split('.')
-                layer_name = param_path[0]
-                param_type = param_path[-1]  # kernel or bias
-                return dist.Normal(pretrained_priors[layer_name][param_type], priors_sigma)
-            return dist.Normal(0., priors_sigma)
+            param_path = name.split('.')
+            layer_name = param_path[0]
+            param_type = param_path[-1]  # kernel or bias
+            return dist.Normal(pretrained_priors[layer_name][param_type], priors_sigma)
 
         current_input = X
         
@@ -149,7 +129,6 @@ class PartialBNN2(BNN):
                 Defaults to None (all input data is processed as a single batch).
             sgd_wa_epochs (int, optional): Number of epochs for stochastic weight averaging. Defaults to 10.
             map_sigma (float, optional): Sigma in Gaussian prior for regularized SGD training. Defaults to 1.0.
-            priors_from_map (bool, optional): Use MAP values to initialize BNN weight priors. Defaults to False.
             priors_sigma (float, optional): Standard deviation for default or pretrained priors
                 in the Bayesian part of the NN. Defaults to 1.0.
             progress_bar (bool, optional): Show progress bar. Defaults to True.
@@ -159,7 +138,7 @@ class PartialBNN2(BNN):
             extra_fields (Optional[Tuple[str, ...]], optional): Extra fields to collect during the MCMC run. 
                 Defaults to ().
         """
-        if hasattr(self, "untrained_deterministic_nn"):
+        if not self.deterministic_weights:
             print("Training deterministic NN...")
             X, y = self.set_data(X, y)
             det_nn = DeterministicNN(
@@ -167,12 +146,8 @@ class PartialBNN2(BNN):
                 input_shape = X.shape[1:] if X.ndim > 2 else (X.shape[-1],), # different input shape for ConvNet and MLP
                 learning_rate=sgd_lr, swa_epochs=sgd_wa_epochs, sigma=map_sigma)
             det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs, sgd_batch_size)
-            (self.subnet1, self.subnet1_params,
-            self.subnet2, self.subnet2_params) = self.splitter(
-                det_nn.model, det_nn.state.params,
-                self.num_stochastic_layers)
+            self.deterministic_weights = det_nn.state.params
             print("Training partially Bayesian NN")
         super().fit(
             X, y, num_warmup, num_samples, num_chains, chain_method,
-            self.subnet2_params if priors_from_map else None,
             priors_sigma, progress_bar, device, rng_key, extra_fields)

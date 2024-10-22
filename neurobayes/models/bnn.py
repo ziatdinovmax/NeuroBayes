@@ -42,7 +42,8 @@ class BNN:
                  conv_layers: List[int] = None,
                  input_dim: int = None,
                  activation: str = 'tanh',
-                 noise_prior: Optional[dist.Distribution] = None
+                 noise_prior: Optional[dist.Distribution] = None,
+                 pretrained_priors: Optional[Dict[str, Dict[str, jnp.ndarray]]] = None
                  ) -> None:
         if noise_prior is None:
             noise_prior = dist.HalfNormal(1.0)
@@ -53,24 +54,22 @@ class BNN:
             hdim = hidden_dim if hidden_dim is not None else [32, 16, 8]
             self.nn = FlaxMLP(hdim, target_dim, activation)
         self.noise_prior = noise_prior
+        self.pretrained_priors = pretrained_priors
 
     def model(self,
               X: jnp.ndarray,
               y: jnp.ndarray = None,
-              pretrained_priors: Dict = None,
               priors_sigma: float = 1.0,
               **kwargs) -> None:
         """BNN model"""
         
         def prior(name, shape):
-            if pretrained_priors is not None:
+            if self.pretrained_priors is not None:
                 param_path = name.split('.')
-                mean = pretrained_priors
-                for path in param_path:
-                    mean = mean[path]
-                return dist.Normal(mean, priors_sigma)
-            else:
-                return dist.Normal(0., priors_sigma)
+                layer_name = param_path[0]
+                param_type = param_path[-1]  # kernel or bias
+                return dist.Normal(self.pretrained_priors[layer_name][param_type], priors_sigma)
+            return dist.Normal(0., priors_sigma)
         
         input_shape = X.shape[1:] if X.ndim > 2 else (X.shape[-1],)
 
@@ -89,7 +88,6 @@ class BNN:
     def fit(self, X: jnp.ndarray, y: jnp.ndarray,
             num_warmup: int = 2000, num_samples: int = 2000,
             num_chains: int = 1, chain_method: str = 'sequential',
-            pretrained_priors: Optional[Dict[str, Dict[str, jnp.ndarray]]] = None,
             priors_sigma: Optional[float] = 1.0,
             progress_bar: bool = True, device: Optional[str] = None,
             rng_key: Optional[jnp.array] = None,
@@ -109,8 +107,6 @@ class BNN:
             num_chains (int, optional): Number of NUTS chains to run. Defaults to 1.
             chain_method (str, optional): Method for running chains: 'sequential', 'parallel', 
                 or 'vectorized'. Defaults to 'sequential'.
-            pretrained_priors (Dict[str, Dict[str, jnp.ndarray]], optional): Dictionary with mean 
-                values for Normal prior distributions over model weights and biases.
             priors_sigma (float, optional): Standard deviation for default or pretrained priors. 
                 Defaults to 1.0.
             progress_bar (bool, optional): Whether to show a progress bar. Defaults to True.
@@ -144,7 +140,7 @@ class BNN:
         )
         self.mcmc.run(
             key, X, y,
-            pretrained_priors, priors_sigma,
+            priors_sigma,
             extra_fields=extra_fields)
 
     def sample_noise(self) -> jnp.ndarray:
