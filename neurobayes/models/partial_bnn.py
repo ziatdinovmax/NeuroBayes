@@ -8,7 +8,7 @@ from numpyro.contrib.module import random_flax_module
 from .bnn import BNN
 from ..flax_nets import FlaxMLP, FlaxConvNet
 from ..flax_nets import DeterministicNN
-from ..flax_nets import extract_mlp_configs, MLPLayerModule
+from ..flax_nets import MLPLayerModule, ConvLayerModule, extract_configs
 
 class PartialBNN(BNN):
     """
@@ -40,7 +40,7 @@ class PartialBNN(BNN):
         self.deterministic_nn = deterministic_nn
         self.deterministic_weights = deterministic_weights
 
-        self.layer_configs = extract_mlp_configs(
+        self.layer_configs = extract_configs(
             deterministic_nn, probabilistic_layer_names, num_probabilistic_layers)
     
     def model(self,
@@ -63,18 +63,21 @@ class PartialBNN(BNN):
 
         current_input = X
         
-        for idx, config in enumerate(self.layer_configs):
-            layer_name = config["layer_name"]
-            layer = MLPLayerModule(
+        for config in self.layer_configs:
+            layer_name = config['layer_name']
+            layer_cls = ConvLayerModule if config["layer_type"] == "conv" else MLPLayerModule
+            layer = layer_cls(
                 features=config['features'],
                 activation=config['activation'],
-                layer_name=layer_name
+                layer_name=layer_name,
+                **({"input_dim": config['input_dim'], 
+                    "kernel_size": config['kernel_size']} if config["layer_type"] == "conv" else {})
             )
             
             if config['is_probabilistic']:
                 net = random_flax_module(
                     layer_name, layer, 
-                    input_shape=(1, current_input.shape[-1]),
+                    input_shape=(1, *current_input.shape[1:]),
                     prior=prior
                 )
                 current_input = net(current_input)
@@ -103,7 +106,7 @@ class PartialBNN(BNN):
             num_chains: int = 1, chain_method: str = 'sequential',
             sgd_epochs: Optional[int] = None, sgd_lr: Optional[float] = 0.01,
             sgd_batch_size: Optional[int] = None, sgd_wa_epochs: Optional[int] = 10,
-            map_sigma: float = 1.0, priors_from_map: bool = False, priors_sigma: float = 1.0,
+            map_sigma: float = 1.0, priors_sigma: float = 1.0,
             progress_bar: bool = True, device: str = None,
             rng_key: Optional[jnp.array] = None,
             extra_fields: Optional[Tuple[str, ...]] = ()
