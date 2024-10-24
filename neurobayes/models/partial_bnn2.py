@@ -51,7 +51,9 @@ class PartialBNN2(BNN):
         """Partial BNN model"""
     
         net = self.deterministic_nn
-        pretrained_priors = self.deterministic_weights
+        pretrained_priors = {}
+        for module_dict in self.deterministic_weights.values():
+            pretrained_priors.update(module_dict)
         
         def prior(name, shape):
             param_path = name.split('.')
