@@ -6,8 +6,6 @@ import numpyro.distributions as dist
 from numpyro.contrib.module import random_flax_module
 
 from .bnn_heteroskedastic import HeteroskedasticBNN
-from ..flax_nets import FlaxMLP, FlaxConvNet
-
 
 class VarianceModelHeteroskedasticBNN(HeteroskedasticBNN):
     """

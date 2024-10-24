@@ -9,7 +9,6 @@ import numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS, init_to_median, Predictive
 from numpyro.contrib.module import random_flax_module
 
-from ..flax_nets import FlaxMLP, FlaxConvNet
 from ..utils.utils import put_on_device, split_dict
 
 

@@ -4,11 +4,9 @@ import jax.numpy as jnp
 import flax
 import numpyro
 import numpyro.distributions as dist
-from numpyro.infer import Predictive
 from numpyro.contrib.module import random_flax_module
 
 from .bnn import BNN
-from ..flax_nets import FlaxMLP2Head, FlaxConvNet2Head
 from ..utils.utils import put_on_device
 
 
