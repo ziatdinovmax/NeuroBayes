@@ -33,7 +33,7 @@ class VarianceModelHeteroskedasticBNN(HeteroskedasticBNN):
 
         net = random_flax_module(
             "nn", self.nn, input_shape=(1, input_shape),
-            prior=(lambda name, shape: dist.Cauchy() if name == "bias" else dist.Normal()))
+            prior=(lambda name, shape:  dist.Normal(0, 1)))
 
         # Pass inputs through a NN with the sampled parameters
         mu = numpyro.deterministic("mu", net(X))

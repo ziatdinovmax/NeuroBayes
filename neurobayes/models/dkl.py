@@ -46,7 +46,7 @@ class DKL(GP):
         input_shape = X.shape[1:] if X.ndim > 2 else (X.shape[-1],)
         net = random_flax_module(
             "nn", self.nn, input_shape=(1, *input_shape),
-            prior=(lambda name, shape: dist.Cauchy() if name == "bias" else dist.Normal()))
+            prior=(lambda name, shape: dist.Normal(0, 1)))
         z = net(X)
         # GP Part
         f_loc = jnp.zeros(X.shape[0])
