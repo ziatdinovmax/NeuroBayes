@@ -1,7 +1,8 @@
-from typing import Dict, Tuple, Optional, Union, List
+from typing import Dict, Tuple, Optional, Union, List, Type
 import jax
 import jax.random as jra
 import jax.numpy as jnp
+import flax
 
 import numpyro
 import numpyro.distributions as dist
@@ -23,36 +24,21 @@ class BNN:
     outcomes, thus quantifying the inherent uncertainty.
 
     Args:
-        target_dim (int): Dimensionality of the target variable. For example, if predicting a 
-            single scalar property, set target_dim=1.
-        hidden_dim (List[int], optional): List specifying the number of hidden units in each layer 
-            of the neural network architecture. Defaults to [32, 16, 8].
-        conv_layers (List[int], optional): List specifying the number of filters in each 
-            convolutional layer. If provided, enables a ConvNet architecture with max pooling 
-            between each conv layer.
-        input_dim (int, optional): Input dimensionality (between 1 and 3). Required only for 
-            ConvNet architecture.
-        activation (str, optional): Non-linear activation function to use. Defaults to 'tanh'.
+        architecture: a Flax model
         noise_prior (dist.Distribution, optional): Prior probability distribution over 
             observational noise. Defaults to HalfNormal(1.0).
+        pretrained_priors (Dict, optional):
+            Dictionary with pre-trained weights for the provided model architecture.
+            These weight values will be used to initialize prior distributions in BNN.
     """
     def __init__(self,
-                 target_dim: int,
-                 hidden_dim: List[int] = None,
-                 conv_layers: List[int] = None,
-                 input_dim: int = None,
-                 activation: str = 'tanh',
+                 architecture: Type[flax.linen.Module],
                  noise_prior: Optional[dist.Distribution] = None,
                  pretrained_priors: Optional[Dict[str, Dict[str, jnp.ndarray]]] = None
                  ) -> None:
         if noise_prior is None:
             noise_prior = dist.HalfNormal(1.0)
-        if conv_layers:
-            hdim = hidden_dim if hidden_dim is not None else [int(conv_layers[-1] * 2),]
-            self.nn = FlaxConvNet(input_dim, conv_layers, hdim, target_dim, activation)
-        else:
-            hdim = hidden_dim if hidden_dim is not None else [32, 16, 8]
-            self.nn = FlaxMLP(hdim, target_dim, activation)
+        self.nn = architecture
         self.noise_prior = noise_prior
         self.pretrained_priors = pretrained_priors
 
