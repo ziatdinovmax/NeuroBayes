@@ -65,7 +65,7 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
         
         # Process shared layers
         for idx, config in enumerate(self.layer_configs[:-2]):  # All but the two head layers
-            layer_name = f"Dense{idx}"
+            layer_name = config["layer_name"]
             layer = MLPLayerModule(
                 features=config['features'],
                 activation=config['activation'],
@@ -95,15 +95,16 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
         
         # Mean head
         mean_config = self.layer_configs[-2]
+        layer_name = mean_config["layer_name"]
         mean_layer = MLPLayerModule(
             features=mean_config['features'],
             activation=mean_config['activation'],
-            layer_name="MeanHead"
+            layer_name=layer_name
         )
         
         if mean_config['is_probabilistic']:
             net = random_flax_module(
-                "MeanHead", mean_layer,
+                layer_name, mean_layer,
                 input_shape=(1, shared_output.shape[-1]),
                 prior=prior
             )
@@ -111,9 +112,9 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
         else:
             params = {
                 "params": {
-                    "MeanHead": {
-                        "kernel": pretrained_priors["MeanHead"]["kernel"],
-                        "bias": pretrained_priors["MeanHead"]["bias"]
+                    layer_name: {
+                        "kernel": pretrained_priors[layer_name]["kernel"],
+                        "bias": pretrained_priors[layer_name]["bias"]
                     }
                 }
             }
@@ -121,15 +122,16 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
         
         # Variance head
         var_config = self.layer_configs[-1]
+        layer_name = var_config["layer_name"]
         var_layer = MLPLayerModule(
             features=var_config['features'],
             activation=var_config['activation'],
-            layer_name="VarianceHead"
+            layer_name=layer_name
         )
         
         if var_config['is_probabilistic']:
             net = random_flax_module(
-                "VarianceHead", var_layer,
+                layer_name, var_layer,
                 input_shape=(1, shared_output.shape[-1]),
                 prior=prior
             )
@@ -138,8 +140,8 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
             params = {
                 "params": {
                     "VarianceHead": {
-                        "kernel": pretrained_priors["VarianceHead"]["kernel"],
-                        "bias": pretrained_priors["VarianceHead"]["bias"]
+                        "kernel": pretrained_priors[layer_name]["kernel"],
+                        "bias": pretrained_priors[layer_name]["bias"]
                     }
                 }
             }

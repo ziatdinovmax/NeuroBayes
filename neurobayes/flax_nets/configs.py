@@ -42,7 +42,8 @@ def extract_mlp_configs(
         configs.append({
             "features": hidden_dim,
             "activation": activation_fn,
-            "is_probabilistic": layer_name in probabilistic_layers
+            "is_probabilistic": layer_name in probabilistic_layers,
+            "layer_name": layer_name
         })
     
     # Process output layer if it exists
@@ -51,7 +52,8 @@ def extract_mlp_configs(
         configs.append({
             "features": mlp.target_dim,
             "activation": None,
-            "is_probabilistic": layer_name in probabilistic_layers
+            "is_probabilistic": layer_name in probabilistic_layers,
+            "layer_name": layer_name
         })
     
     return configs
@@ -97,20 +99,26 @@ def extract_mlp2head_configs(
         configs.append({
             "features": hidden_dim,
             "activation": activation_fn,
-            "is_probabilistic": layer_name in probabilistic_layers
+            "is_probabilistic": layer_name in probabilistic_layers,
+            "layer_name": layer_name
         })
     
     # Process head layers
+    layer_name = "MeanHead"
     configs.append({
         "features": mlp.target_dim,
         "activation": None,
-        "is_probabilistic": "MeanHead" in probabilistic_layers
+        "is_probabilistic": layer_name in probabilistic_layers,
+        "layer_name": layer_name
     })
-    
+    layer_name = "VarianceHead"
     configs.append({
         "features": mlp.target_dim,
         "activation": nn.softplus,
-        "is_probabilistic": "VarianceHead" in probabilistic_layers
+        "is_probabilistic": layer_name in probabilistic_layers,
+        "layer_name": layer_name
     })
     
     return configs
+
+
