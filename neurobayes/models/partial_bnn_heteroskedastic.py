@@ -1,4 +1,4 @@
-from typing import List, Optional, Type, Dict, Tuple
+from typing import List, Optional, Type, Dict, Tuple, Union
 import jax.numpy as jnp
 import numpyro
 import numpyro.distributions as dist
@@ -7,38 +7,40 @@ import flax
 
 from .bnn_heteroskedastic import HeteroskedasticBNN
 from ..flax_nets import DeterministicNN
-from ..flax_nets import FlaxMLP2Head, FlaxConvNet2Head, split_mlp2head, split_convnet2head
+from ..flax_nets import FlaxMLP2Head, FlaxConvNet2Head
+from ..flax_nets import extract_mlp2head_configs, MLPLayerModule
+
 
 
 class HeteroskedasticPartialBNN(HeteroskedasticBNN):
     """
     Heteroskedastic Partially Bayesian Neural Network
+
+    Args:
+        deterministic_nn:
+            Neural network architecture (MLP, ConvNet, or other supported types)
+        deterministic_weights:
+            Pre-trained deterministic weights, If not provided,
+            the deterministic_nn will be trained from scratch when running .fit() method
+        num_probabilistic_layers
+            Number of layers at the end of deterministic_nn to be treated as fully stochastic ('Bayesian')
+        probabilistic_layer_names:
+            Names of neural network modules to be treated probabilistically
     """
-     # Dictionary mapping network types to their corresponding splitter functions
-    SPLITTERS = {
-        FlaxMLP2Head: split_mlp2head,
-        FlaxConvNet2Head: split_convnet2head,
-        # More network types and their splitters TBA
-    }
+
     def __init__(self,
-                 deterministic_nn: Type[flax.linen.Module],
+                 deterministic_nn: Union[Type[FlaxMLP2Head], Type[FlaxConvNet2Head]],
                  deterministic_weights: Optional[Dict[str, jnp.ndarray]] = None,
-                 num_stochastic_layers: int = 1
+                 num_probabilistic_layers: int = None,
+                 probabilistic_layer_names: List[str] = None,
                  ) -> None:
         super().__init__(None)
 
-        self.nn_type = type(deterministic_nn)
-        if self.nn_type not in self.SPLITTERS:
-            raise ValueError(f"Unsupported network type: {self.nn_type}")
-        self.splitter = self.SPLITTERS[self.nn_type]
+        self.deterministic_nn = deterministic_nn
+        self.deterministic_weights = deterministic_weights
 
-        if deterministic_weights:
-            (self.subnet1, self.subnet1_params,
-                self.subnet2, self.subnet2_params) = self.splitter(
-                    deterministic_nn, deterministic_weights)
-        else:
-            self.untrained_deterministic_nn = deterministic_nn
-            self.num_stochastic_layers = num_stochastic_layers
+        self.layer_configs = extract_mlp2head_configs(
+            deterministic_nn, probabilistic_layer_names, num_probabilistic_layers)
 
     def model(self,
               X: jnp.ndarray,
@@ -48,26 +50,104 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
               **kwargs) -> None:
         """Heteroskedastic (partial) BNN probabilistic model"""
 
+        net = self.deterministic_nn
+        pretrained_priors = {}
+        for module_dict in self.deterministic_weights.values():
+            pretrained_priors.update(module_dict)
+            
         def prior(name, shape):
-            if pretrained_priors is not None:
-                param_path = name.split('.')
-                mean = pretrained_priors
-                for path in param_path:
-                    mean = mean[path]
-                return dist.Normal(mean, priors_sigma)
+            param_path = name.split('.')
+            layer_name = param_path[0]
+            param_type = param_path[-1]  # kernel or bias
+            return dist.Normal(pretrained_priors[layer_name][param_type], priors_sigma)
+
+        current_input = X
+        
+        # Process shared layers
+        for idx, config in enumerate(self.layer_configs[:-2]):  # All but the two head layers
+            layer_name = f"Dense{idx}"
+            layer = MLPLayerModule(
+                features=config['features'],
+                activation=config['activation'],
+                layer_name=layer_name
+            )
+            
+            if config['is_probabilistic']:
+                net = random_flax_module(
+                    layer_name, layer, 
+                    input_shape=(1, current_input.shape[-1]),
+                    prior=prior
+                )
+                current_input = net(current_input)
             else:
-                return dist.Normal(0., priors_sigma)
+                params = {
+                    "params": {
+                        layer_name: {
+                            "kernel": pretrained_priors[layer_name]["kernel"],
+                            "bias": pretrained_priors[layer_name]["bias"]
+                        }
+                    }
+                }
+                current_input = layer.apply(params, current_input)
 
-        X = self.subnet1.apply({'params': self.subnet1_params}, X)
+        # Process head layers
+        shared_output = current_input
+        
+        # Mean head
+        mean_config = self.layer_configs[-2]
+        mean_layer = MLPLayerModule(
+            features=mean_config['features'],
+            activation=mean_config['activation'],
+            layer_name="MeanHead"
+        )
+        
+        if mean_config['is_probabilistic']:
+            net = random_flax_module(
+                "MeanHead", mean_layer,
+                input_shape=(1, shared_output.shape[-1]),
+                prior=prior
+            )
+            mean = net(shared_output)
+        else:
+            params = {
+                "params": {
+                    "MeanHead": {
+                        "kernel": pretrained_priors["MeanHead"]["kernel"],
+                        "bias": pretrained_priors["MeanHead"]["bias"]
+                    }
+                }
+            }
+            mean = mean_layer.apply(params, shared_output)
+        
+        # Variance head
+        var_config = self.layer_configs[-1]
+        var_layer = MLPLayerModule(
+            features=var_config['features'],
+            activation=var_config['activation'],
+            layer_name="VarianceHead"
+        )
+        
+        if var_config['is_probabilistic']:
+            net = random_flax_module(
+                "VarianceHead", var_layer,
+                input_shape=(1, shared_output.shape[-1]),
+                prior=prior
+            )
+            variance = net(shared_output)
+        else:
+            params = {
+                "params": {
+                    "VarianceHead": {
+                        "kernel": pretrained_priors["VarianceHead"]["kernel"],
+                        "bias": pretrained_priors["VarianceHead"]["bias"]
+                    }
+                }
+            }
+            variance = var_layer.apply(params, shared_output)
 
-        bnn = random_flax_module(
-            "nn", self.subnet2, input_shape=(1, X.shape[-1]), prior=prior)
-
-        # Pass inputs through a NN with the sampled parameters
-        mu, sig = bnn(X)
         # Register values with numpyro
-        mu = numpyro.deterministic("mu", mu)
-        sig = numpyro.deterministic("sig", sig)
+        mu = numpyro.deterministic("mu", mean)
+        sig = numpyro.deterministic("sig", variance)
 
         # Score against the observed data points
         numpyro.sample("y", dist.Normal(mu, sig), obs=y)
@@ -100,7 +180,6 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
                 Defaults to None, meaning that an entire dataset is passed through an NN.
             sgd_wa_epochs: Number of epochs for stochastic weight averaging at the end of SGD training trajectory (defautls to 10)
             map_sigma: sigma in gaussian prior for regularized SGD training
-            priors_from_map: use MAP values to initialize BNN weight priors
             priors_sigma: Standard deviation for default or pretrained priors (defaults to 1.0)
             progress_bar: show progress bar
             device:
@@ -111,21 +190,17 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
                 Extra fields (e.g. 'accept_prob') to collect during the HMC run.
                 The extra fields are accessible from model.mcmc.get_extra_fields() after model training.
         """
-        if hasattr(self, "untrained_deterministic_nn"):
+        if not self.deterministic_weights:
             print("Training deterministic NN...")
             X, y = self.set_data(X, y)
             det_nn = DeterministicNN(
-                self.untrained_deterministic_nn,
+                self.deterministic_nn,
                 input_shape = X.shape[1:] if X.ndim > 2 else (X.shape[-1],), # different input dims for ConvNet and MLP 
                 loss='heteroskedastic', learning_rate=sgd_lr,
                 swa_epochs=sgd_wa_epochs, sigma=map_sigma)
             det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs, sgd_batch_size)
-            (self.subnet1, self.subnet1_params,
-                self.subnet2, self.subnet2_params) = self.splitter(
-                    det_nn.model, det_nn.state.params,
-                self.num_stochastic_layers)
+            self.deterministic_weights = det_nn.state.params
             print("Training partially Bayesian NN")
         super().fit(X, y, num_warmup, num_samples, num_chains, chain_method,
-                    self.subnet2_params if priors_from_map else None, priors_sigma,
-                    progress_bar, device, rng_key, extra_fields)
+                    priors_sigma, progress_bar, device, rng_key, extra_fields)
 
