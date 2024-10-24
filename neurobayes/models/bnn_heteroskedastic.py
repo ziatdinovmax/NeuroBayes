@@ -1,6 +1,7 @@
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Type
 import jax.random as jra
 import jax.numpy as jnp
+import flax
 import numpyro
 import numpyro.distributions as dist
 from numpyro.infer import Predictive
@@ -16,33 +17,16 @@ class HeteroskedasticBNN(BNN):
     Heteroskedastic Bayesian Neural Network for input-dependent observational noise
 
     Args:
-        target_dim (int): Dimensionality of the target variable. For example, if predicting a 
-            single scalar property, set target_dim=1.
-        hidden_dim (List[int], optional): List specifying the number of hidden units in each layer 
-            of the neural network architecture. Defaults to [32, 16, 8].
-        conv_layers (List[int], optional): List specifying the number of filters in each 
-            convolutional layer. If provided, enables a ConvNet architecture with max pooling 
-            between each conv layer.
-        input_dim (int, optional): Input dimensionality (between 1 and 3). Required only for 
-            ConvNet architecture.
-        activation (str, optional): Non-linear activation function to use. Defaults to 'tanh'.
+        architecture: a Flax model
+        pretrained_priors (Dict, optional):
+            Dictionary with pre-trained weights for the provided model architecture.
+            These weight values will be used to initialize prior distributions in BNN.
     """
     def __init__(self,
-                 target_dim: int,
-                 hidden_dim: List[int] = None,
-                 conv_layers: List[int] = None,
-                 input_dim: int = None,
-                 activation: str = 'tanh',
+                 architecture: Type[flax.linen.Module],
+                 pretrained_priors: Optional[Dict[str, Dict[str, jnp.ndarray]]] = None
                  ) -> None:
-        super().__init__(target_dim, hidden_dim, conv_layers, activation)
-
-        # Override the default mlp/convnet with heteroskedastic versions
-        if conv_layers:
-            hdim = hidden_dim if hidden_dim is not None else [int(conv_layers[-1] * 2),]
-            self.nn = FlaxConvNet2Head(input_dim, conv_layers, hdim, target_dim, activation)
-        else:
-            hdim = hidden_dim if hidden_dim is not None else [32, 16, 8]
-            self.nn = FlaxMLP2Head(hdim, target_dim, activation)        
+        super().__init__(architecture, pretrained_priors=pretrained_priors)
 
     def model(self,
               X: jnp.ndarray,
@@ -52,15 +36,19 @@ class HeteroskedasticBNN(BNN):
               **kwargs) -> None:
         """Heteroskedastic BNN model"""
 
+        if self.pretrained_priors is not None:
+            pretrained_priors = {}
+            for module_dict in self.pretrained_priors.values():
+                pretrained_priors.update(module_dict)
+            self.pretrained_priors = pretrained_priors
+
         def prior(name, shape):
-            if pretrained_priors is not None:
+            if self.pretrained_priors is not None:
                 param_path = name.split('.')
-                mean = pretrained_priors
-                for path in param_path:
-                    mean = mean[path]
-                return dist.Normal(mean, priors_sigma)
-            else:
-                return dist.Normal(0., priors_sigma)
+                layer_name = param_path[0]
+                param_type = param_path[-1]  # kernel or bias
+                return dist.Normal(self.pretrained_priors[layer_name][param_type], priors_sigma)
+            return dist.Normal(0., priors_sigma)
 
         input_shape = X.shape[1:] if X.ndim > 2 else (X.shape[-1],)
 
