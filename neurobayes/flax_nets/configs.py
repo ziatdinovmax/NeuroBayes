@@ -2,25 +2,40 @@ from typing import Dict, List, Any
 import flax.linen as nn
 from .mlp import FlaxMLP
 
+
 def extract_mlp_configs(
     mlp: FlaxMLP,
-    probabilistic_layers: List[str]
-) -> List[Dict]:
+    probabilistic_layers: List[str] = None,
+    num_probabilistic_layers: int = None
+    ) -> List[Dict]:
     """
     Extract layer configurations from a FlaxMLP model.
     
     Args:
         mlp: The FlaxMLP instance
         probabilistic_layers: List of layer names to be treated as probabilistic
-        
-    Returns:
-        List of layer configurations for BNN
+        num_probabilistic_layers: Number of hidden layers to be probabilistic
+                                (0 means only output layer is probabilistic)
     """
-    configs = []
+    if (probabilistic_layers is None) == (num_probabilistic_layers is None):
+        raise ValueError(
+            "Exactly one of 'probabilistic_layers' or 'num_probabilistic_layers' must be specified"
+        )
     
+    # Get all layer names
+    layer_names = [f"Dense{i}" for i in range(len(mlp.hidden_dims))]
+    if mlp.target_dim:
+        layer_names.append(f"Dense{len(mlp.hidden_dims)}")
+    
+    # If using num_probabilistic_layers, create probabilistic_layers list
+    if num_probabilistic_layers is not None:
+        hidden_layers = layer_names[:-1][-num_probabilistic_layers:] if num_probabilistic_layers > 0 else []
+        probabilistic_layers = hidden_layers + [layer_names[-1]]  # Always add output layer
+
     # Get activation function
     activation_fn = nn.tanh if mlp.activation == 'tanh' else nn.silu
     
+    configs = []
     # Process hidden layers
     for i, hidden_dim in enumerate(mlp.hidden_dims):
         layer_name = f"Dense{i}"
@@ -35,21 +50,8 @@ def extract_mlp_configs(
         layer_name = f"Dense{len(mlp.hidden_dims)}"
         configs.append({
             "features": mlp.target_dim,
-            "activation": None,  # No activation for output layer
+            "activation": None,
             "is_probabilistic": layer_name in probabilistic_layers
         })
     
     return configs
-
-
-class MLPLayerModule(nn.Module):
-    features: int
-    activation: Any = None
-    layer_name: str = 'dense'
-    
-    @nn.compact
-    def __call__(self, x):
-        x = nn.Dense(features=self.features, name=self.layer_name)(x)
-        if self.activation is not None:
-            x = self.activation(x)
-        return x

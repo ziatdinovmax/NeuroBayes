@@ -6,7 +6,7 @@ import numpyro.distributions as dist
 from numpyro.contrib.module import random_flax_module
 
 from .bnn import BNN
-from ..flax_nets import FlaxMLP, FlaxConvNet, split_mlp, split_convnet
+from ..flax_nets import FlaxMLP, FlaxConvNet
 from ..flax_nets import DeterministicNN
 from ..flax_nets import extract_mlp_configs, MLPLayerModule
 
@@ -20,9 +20,9 @@ class PartialBNN2(BNN):
         deterministic_weights:
             Pre-trained deterministic weights, If not provided,
             the deterministic_nn will be trained from scratch when running .fit() method
-        num_stochastic_layers:
+        num_probabilistic_layers
             Number of layers at the end of deterministic_nn to be treated as fully stochastic ('Bayesian')
-        stochastic_layer_names:
+        probabilistic_layer_names:
             Names of neural network modules to be treated probabilistically
         noise_prior:
             Custom prior for observational noise distribution
@@ -31,8 +31,8 @@ class PartialBNN2(BNN):
     def __init__(self,
                  deterministic_nn: Union[Type[FlaxMLP], Type[FlaxConvNet]],
                  deterministic_weights: Optional[Dict[str, jnp.ndarray]] = None,
-                 num_stochastic_layers: int = 1,
-                 stochastic_layer_names: List[str] = None,
+                 num_probabilistic_layers: int = None,
+                 probabilistic_layer_names: List[str] = None,
                  noise_prior: Optional[dist.Distribution] = None
                  ) -> None:
         super().__init__(None, noise_prior=noise_prior)
@@ -40,7 +40,8 @@ class PartialBNN2(BNN):
         self.deterministic_nn = deterministic_nn
         self.deterministic_weights = deterministic_weights
 
-        self.probabilistic_layers = stochastic_layer_names
+        self.layer_configs = extract_mlp_configs(
+            deterministic_nn, probabilistic_layer_names, num_probabilistic_layers)
     
     def model(self,
           X: jnp.ndarray,
@@ -51,9 +52,6 @@ class PartialBNN2(BNN):
     
         net = self.deterministic_nn
         pretrained_priors = self.deterministic_weights
-
-        # Extract layer configurations
-        layer_configs = extract_mlp_configs(net, self.probabilistic_layers)
         
         def prior(name, shape):
             param_path = name.split('.')
@@ -63,7 +61,7 @@ class PartialBNN2(BNN):
 
         current_input = X
         
-        for idx, config in enumerate(layer_configs):
+        for idx, config in enumerate(self.layer_configs):
             layer_name = f"Dense{idx}"
             layer = MLPLayerModule(
                 features=config['features'],
