@@ -44,6 +44,7 @@ def extract_mlp_configs(
             "features": hidden_dim,
             "activation": activation_fn,
             "is_probabilistic": layer_name in probabilistic_layers,
+            "layer_type": "fc",
             "layer_name": layer_name
         })
     
@@ -54,6 +55,7 @@ def extract_mlp_configs(
             "features": mlp.target_dim,
             "activation": None,
             "is_probabilistic": layer_name in probabilistic_layers,
+            "layer_type": "fc",
             "layer_name": layer_name
         })
     
@@ -101,6 +103,7 @@ def extract_mlp2head_configs(
             "features": hidden_dim,
             "activation": activation_fn,
             "is_probabilistic": layer_name in probabilistic_layers,
+            "layer_type": "fc",
             "layer_name": layer_name
         })
     
@@ -117,6 +120,7 @@ def extract_mlp2head_configs(
         "features": mlp.target_dim,
         "activation": nn.softplus,
         "is_probabilistic": layer_name in probabilistic_layers,
+        "layer_type": "fc",
         "layer_name": layer_name
     })
     
