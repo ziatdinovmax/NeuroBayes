@@ -9,6 +9,7 @@ from .bnn import BNN
 from ..flax_nets import FlaxMLP, FlaxConvNet
 from ..flax_nets import DeterministicNN
 from ..flax_nets import MLPLayerModule, ConvLayerModule, extract_configs
+from ..utils import flatten_params_dict
 
 class PartialBNN(BNN):
     """
@@ -51,9 +52,7 @@ class PartialBNN(BNN):
         """Partial BNN model"""
     
         net = self.deterministic_nn
-        pretrained_priors = {}
-        for module_dict in self.deterministic_weights.values():
-            pretrained_priors.update(module_dict)
+        pretrained_priors = flatten_params_dict(self.deterministic_weights)
         
         def prior(name, shape):
             param_path = name.split('.')
@@ -62,9 +61,20 @@ class PartialBNN(BNN):
             return dist.Normal(pretrained_priors[layer_name][param_type], priors_sigma)
 
         current_input = X
+
+        # Track when we switch from conv to dense layers
+        last_conv_idx = max(
+            (i for i, c in enumerate(self.layer_configs) if c["layer_type"] == "conv"),
+            default=-1
+        )
         
-        for config in self.layer_configs:
+        for idx, config in enumerate(self.layer_configs):
             layer_name = config['layer_name']
+
+            # Flatten inputs after last conv layer
+            if idx > last_conv_idx and idx-1 == last_conv_idx:
+                current_input = current_input.reshape((current_input.shape[0], -1))
+
             layer_cls = ConvLayerModule if config["layer_type"] == "conv" else MLPLayerModule
             layer = layer_cls(
                 features=config['features'],

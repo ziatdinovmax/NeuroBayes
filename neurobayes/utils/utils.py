@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Any
 
 import jax
 import jax.numpy as jnp
@@ -200,3 +200,20 @@ def calculate_sigma(X):
     avg_squared_norm = np.mean(np.sum(X**2, axis=1))
     sigma = np.sqrt(avg_squared_norm / n_features)
     return sigma
+
+
+def flatten_params_dict(params_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Recursively flatten a nested parameter dictionary into a flat dictionary
+    where each key maps to a parameter dictionary with 'kernel' and 'bias'.
+    """
+    flattened = {}
+    for module_dict in params_dict.values():
+        for key, value in module_dict.items():
+            if isinstance(value, dict) and 'kernel' in value and 'bias' in value:
+                # Found a parameter dictionary
+                flattened[key] = value
+            elif isinstance(value, dict):
+                # Keep searching deeper
+                flattened.update(flatten_params_dict({key: value}))
+    return flattened
