@@ -48,6 +48,12 @@ class BNN:
               priors_sigma: float = 1.0,
               **kwargs) -> None:
         """BNN model"""
+
+        if self.pretrained_priors is not None:
+            pretrained_priors = {}
+            for module_dict in self.pretrained_priors.values():
+                pretrained_priors.update(module_dict)
+            self.pretrained_priors = pretrained_priors
         
         def prior(name, shape):
             if self.pretrained_priors is not None:
