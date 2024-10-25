@@ -17,8 +17,10 @@ Fully Bayesian Neural Networks replace all constant weights in the network with 
 ```python3
 import neurobayes as nb
 
-# Initialize model
-model = nb.BNN(target_dim=1, hidden_dim=[32, 16, 8, 4])
+# Initialize NN architecture
+architecture = FlaxMLP(hidden_dims = [64, 32, 16, 8], target_dim=1)
+# Initialize Bayesian model
+model = nb.BNN(architecture)
 # Train model
 model.fit(X_measured, y_measured, num_warmup=1000, num_samples=1000)
 # Make a prediction on full domain
@@ -30,12 +32,23 @@ Partially Bayesian Neural Networks replace constant weights with probabilistic d
 
 ```python3
 # Number of probabilistic ('Bayesian') layers
-num_stochastic_layers = 2
+num_probabilistic_layers = 2 # two last learnable layers + output layer
 
-# Initialize a determinsitc neural net
-net = nb.FlaxMLP(hidden_dims=[32, 16, 8, 4], target_dim=1)
 # Intitalize and train a PBNN model
-model = nb.PartialBNN(net, num_stochastic_layers=num_stochastic_layers)
+model = nb.PartialBNN(architecture, num_probabilistic_layers=num_probabilistic_layers)
+model.fit(X_measured, y_measured, num_warmup=1000, num_samples=1000)
+# Make a prediction on unmeasured points or the full domain
+posterior_mean, posterior_var = model.predict(X_domain)
+```
+
+Alternatively, we can specify directly the names of the layers we want to be probabilistic
+
+```python3
+# Specify the names of probabilistic layers (output layer, 'Dense4', needs to be specified explicitly)
+probabilistic_layer_names = ['Dense2', 'Dense3', 'Dense4']
+
+# Intitalize and train a PBNN model
+model = nb.PartialBNN(architecture, probabilistic_layer_names=probabilistic_layer_names)
 model.fit(X_measured, y_measured, num_warmup=1000, num_samples=1000)
 # Make a prediction on unmeasured points or the full domain
 posterior_mean, posterior_var = model.predict(X_domain)
@@ -53,7 +66,7 @@ The usage of a heteroskedastic BNN is straightforward and follows the same patte
 For fully Bayesian heteroskedastic NN:
 ```python3
 # Initialize HeteroskedasticBNN model
-model = nb.HeteroskedasticBNN(target_dim=1)
+model = nb.HeteroskedasticBNN(architecture)
 # Train
 model.fit(X_measured, y_measured, num_warmup=2000, num_samples=2000)
 # Make a prediction
@@ -62,11 +75,8 @@ posterior_mean, posterior_var = model.predict(X_domain)
 
 For partially Bayesian heteroskedastic NN:
 ```python3
-# Initialize model architecture
-hidden_dims = [64, 32, 16, 8, 8]
-net = nb.FlaxMLP2Head(hidden_dims, 1)
-# Pass it to HeteroskedasticPartialBNN module and perform training
-model = nb.HeteroskedasticPartialBNN(net, num_stochastic_layers=2)
+# Initialize and train
+model = nb.HeteroskedasticPartialBNN(architecture, num_probabilistic_layers=2)
 model.fit(X_measured, y_measured, sgd_epochs=5000, sgd_lr=5e-3, num_warmup=1000, num_samples=1000)
 # Make a prediction
 posterior_mean, posterior_var = model.predict(X_domain)
@@ -97,11 +107,11 @@ Note: In practice, you should use proper train-test-validation splits for robust
 Next, train a BNN on experimental data, using the pre-trained weights to set theory-informed BNN priors:
 
 ```python3
-model = nb.BNN(target_dim=1, hidden_dim=hidden_dims)
-model.fit(
-    X2, y2, num_warmup=1000, num_samples=1000, num_chains=1,
-    pretrained_priors=detnn.state.params  # use trained weights to set priors for BNN
-)
+model = nb.BNN(
+    net,
+    pretrained_priors=detnn.state.params  # use pre-trained weights to set priors for BNN
+) 
+model.fit(X2, y2, num_warmup=1000, num_samples=1000, num_chains=1)
 ```
 
 Make a prediction as ususal
@@ -113,4 +123,4 @@ This approach allows you to incorporate domain knowledge or theoretical models i
 
 ![pretrained_priors](https://github.com/user-attachments/assets/33f80877-4a5c-46d2-ba5d-ee540418e21b)
 
-See examples [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/pretrained_priors.ipynb) (full BNN) and [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/pretrained_priors_partial.ipynb) (Partial BNN).
+See example [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/pretrained_priors.ipynb).

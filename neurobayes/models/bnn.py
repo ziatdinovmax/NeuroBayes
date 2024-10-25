@@ -1,15 +1,15 @@
-from typing import Dict, Tuple, Optional, Union, List
+from typing import Dict, Tuple, Optional, Union, List, Type
 import jax
 import jax.random as jra
 import jax.numpy as jnp
+import flax
 
 import numpyro
 import numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS, init_to_median, Predictive
 from numpyro.contrib.module import random_flax_module
 
-from ..flax_nets import FlaxMLP, FlaxConvNet
-from ..utils.utils import put_on_device, split_dict
+from ..utils import put_on_device, flatten_params_dict
 
 
 class BNN:
@@ -23,54 +23,41 @@ class BNN:
     outcomes, thus quantifying the inherent uncertainty.
 
     Args:
-        target_dim (int): Dimensionality of the target variable. For example, if predicting a 
-            single scalar property, set target_dim=1.
-        hidden_dim (List[int], optional): List specifying the number of hidden units in each layer 
-            of the neural network architecture. Defaults to [32, 16, 8].
-        conv_layers (List[int], optional): List specifying the number of filters in each 
-            convolutional layer. If provided, enables a ConvNet architecture with max pooling 
-            between each conv layer.
-        input_dim (int, optional): Input dimensionality (between 1 and 3). Required only for 
-            ConvNet architecture.
-        activation (str, optional): Non-linear activation function to use. Defaults to 'tanh'.
+        architecture: a Flax model
         noise_prior (dist.Distribution, optional): Prior probability distribution over 
             observational noise. Defaults to HalfNormal(1.0).
+        pretrained_priors (Dict, optional):
+            Dictionary with pre-trained weights for the provided model architecture.
+            These weight values will be used to initialize prior distributions in BNN.
     """
     def __init__(self,
-                 target_dim: int,
-                 hidden_dim: List[int] = None,
-                 conv_layers: List[int] = None,
-                 input_dim: int = None,
-                 activation: str = 'tanh',
-                 noise_prior: Optional[dist.Distribution] = None
+                 architecture: Type[flax.linen.Module],
+                 noise_prior: Optional[dist.Distribution] = None,
+                 pretrained_priors: Optional[Dict[str, Dict[str, jnp.ndarray]]] = None
                  ) -> None:
         if noise_prior is None:
             noise_prior = dist.HalfNormal(1.0)
-        if conv_layers:
-            hdim = hidden_dim if hidden_dim is not None else [int(conv_layers[-1] * 2),]
-            self.nn = FlaxConvNet(input_dim, conv_layers, hdim, target_dim, activation)
-        else:
-            hdim = hidden_dim if hidden_dim is not None else [32, 16, 8]
-            self.nn = FlaxMLP(hdim, target_dim, activation)
+        self.nn = architecture
         self.noise_prior = noise_prior
+        self.pretrained_priors = pretrained_priors
 
     def model(self,
               X: jnp.ndarray,
               y: jnp.ndarray = None,
-              pretrained_priors: Dict = None,
               priors_sigma: float = 1.0,
               **kwargs) -> None:
         """BNN model"""
+
+        pretrained_priors = (flatten_params_dict(self.pretrained_priors) 
+                           if self.pretrained_priors is not None else None)
         
         def prior(name, shape):
             if pretrained_priors is not None:
                 param_path = name.split('.')
-                mean = pretrained_priors
-                for path in param_path:
-                    mean = mean[path]
-                return dist.Normal(mean, priors_sigma)
-            else:
-                return dist.Normal(0., priors_sigma)
+                layer_name = param_path[-2]
+                param_type = param_path[-1]  # kernel or bias
+                return dist.Normal(pretrained_priors[layer_name][param_type], priors_sigma)
+            return dist.Normal(0., priors_sigma)
         
         input_shape = X.shape[1:] if X.ndim > 2 else (X.shape[-1],)
 
@@ -89,7 +76,6 @@ class BNN:
     def fit(self, X: jnp.ndarray, y: jnp.ndarray,
             num_warmup: int = 2000, num_samples: int = 2000,
             num_chains: int = 1, chain_method: str = 'sequential',
-            pretrained_priors: Optional[Dict[str, Dict[str, jnp.ndarray]]] = None,
             priors_sigma: Optional[float] = 1.0,
             progress_bar: bool = True, device: Optional[str] = None,
             rng_key: Optional[jnp.array] = None,
@@ -109,8 +95,6 @@ class BNN:
             num_chains (int, optional): Number of NUTS chains to run. Defaults to 1.
             chain_method (str, optional): Method for running chains: 'sequential', 'parallel', 
                 or 'vectorized'. Defaults to 'sequential'.
-            pretrained_priors (Dict[str, Dict[str, jnp.ndarray]], optional): Dictionary with mean 
-                values for Normal prior distributions over model weights and biases.
             priors_sigma (float, optional): Standard deviation for default or pretrained priors. 
                 Defaults to 1.0.
             progress_bar (bool, optional): Whether to show a progress bar. Defaults to True.
@@ -144,7 +128,7 @@ class BNN:
         )
         self.mcmc.run(
             key, X, y,
-            pretrained_priors, priors_sigma,
+            priors_sigma,
             extra_fields=extra_fields)
 
     def sample_noise(self) -> jnp.ndarray:

@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Any
 
 import jax
 import jax.numpy as jnp
@@ -138,21 +138,33 @@ def get_flax_compatible_dict(params_numpyro: Dict[str, jnp.ndarray]) -> Dict[str
     """
     Takes a dictionary with MCMC samples produced by numpyro
     and creates a dictionary with weights and biases compatible
-    with flax .apply() method
+    with flax .apply() method.
     """
     params_all = {}
-    weights, biases = {}, {}
+    module_params = {} 
+    
+    # First pass: organize parameters by module
     for key, val in params_numpyro.items():
         if key.startswith('nn'):
-            layer, param = key.split('/')[-1].split('.')
+            module, layer, param = key.split('/')[-1].split('.')
+            if module not in module_params:
+                module_params[module] = {'weights': {}, 'biases': {}}
             if param == 'bias':
-                biases[layer] = val
+                module_params[module]['biases'][layer] = val
             else:
-                weights[layer] = val
+                module_params[module]['weights'][layer] = val
         else:
             params_all[key] = val
-    for (k, v1), (_, v2) in zip(weights.items(), biases.items()):
-        params_all[k] = {"kernel": v1, "bias": v2}
+    
+    # Second pass: combine weights and biases for each module
+    for module, params in module_params.items():
+        params_all[module] = {}
+        for (layer, w), (_, b) in zip(params['weights'].items(), params['biases'].items()):
+            params_all[module][layer] = {
+                "kernel": w,
+                "bias": b
+            }
+            
     return params_all
 
 
@@ -200,3 +212,20 @@ def calculate_sigma(X):
     avg_squared_norm = np.mean(np.sum(X**2, axis=1))
     sigma = np.sqrt(avg_squared_norm / n_features)
     return sigma
+
+
+def flatten_params_dict(params_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Recursively flatten a nested parameter dictionary into a flat dictionary
+    where each key maps to a parameter dictionary with 'kernel' and 'bias'.
+    """
+    flattened = {}
+    for module_dict in params_dict.values():
+        for key, value in module_dict.items():
+            if isinstance(value, dict) and 'kernel' in value and 'bias' in value:
+                # Found a parameter dictionary
+                flattened[key] = value
+            elif isinstance(value, dict):
+                # Keep searching deeper
+                flattened.update(flatten_params_dict({key: value}))
+    return flattened

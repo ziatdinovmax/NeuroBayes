@@ -1,46 +1,28 @@
-from typing import List, Callable, Optional, Dict
+from typing import List, Callable, Optional, Dict, Type
 import jax.numpy as jnp
+import flax
 import numpyro
 import numpyro.distributions as dist
 from numpyro.contrib.module import random_flax_module
 
 from .bnn_heteroskedastic import HeteroskedasticBNN
-from ..flax_nets import FlaxMLP, FlaxConvNet
-
 
 class VarianceModelHeteroskedasticBNN(HeteroskedasticBNN):
     """
     Variance model based heteroskedastic Bayesian Neural Network
 
     Args:
-        target_dim (int): Dimensionality of the target variable.
+        architecture: a Flax model.
         variance_model (Callable): Function to compute the variance given inputs and parameters.
         variance_model_prior (Callable): Function to sample prior parameters for the variance model.
-        hidden_dim (List[int], optional): List specifying the number of hidden units in each layer 
-            of the neural network architecture. Defaults to [32, 16, 8].
-        conv_layers (List[int], optional): List specifying the number of filters in each 
-            convolutional layer. If provided, enables a ConvNet architecture with max pooling 
-            between each conv layer.
-        input_dim (int, optional): Input dimensionality (between 1 and 3). Required only for 
-            ConvNet architecture.
-        activation (str, optional): Non-linear activation function to use. Defaults to 'tanh'.
     """
     def __init__(self,
-                 target_dim: int,
+                 architecture: Type[flax.linen.Module],
                  variance_model: Optional[Callable[[jnp.ndarray, Dict[str, jnp.ndarray]], jnp.ndarray]],
                  variance_model_prior: Optional[Callable[[], Dict[str, jnp.ndarray]]],
-                 hidden_dim: List[int] = None,
-                 conv_layers: List[int] = None,
-                 input_dim: int = None,
-                 activation: str = 'tanh',
                  ) -> None:
-        super().__init__(target_dim, hidden_dim, conv_layers, input_dim, activation)
-        if conv_layers:
-            hdim = hidden_dim if hidden_dim is not None else [int(conv_layers[-1] * 2),]
-            self.nn = FlaxConvNet(input_dim, conv_layers, hdim, target_dim, activation)
-        else:
-            hdim = hidden_dim if hidden_dim is not None else [32, 16, 8]
-            self.nn = FlaxMLP(hdim, target_dim, activation)
+        super().__init__(architecture)
+        self.nn = architecture
         self.variance_model = variance_model
         self.variance_model_prior = variance_model_prior
 
@@ -51,7 +33,7 @@ class VarianceModelHeteroskedasticBNN(HeteroskedasticBNN):
 
         net = random_flax_module(
             "nn", self.nn, input_shape=(1, input_shape),
-            prior=(lambda name, shape: dist.Cauchy() if name == "bias" else dist.Normal()))
+            prior=(lambda name, shape:  dist.Normal(0, 1)))
 
         # Pass inputs through a NN with the sampled parameters
         mu = numpyro.deterministic("mu", net(X))

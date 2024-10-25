@@ -1,6 +1,7 @@
-from typing import Dict, Callable, Optional, List
+from typing import Dict, Callable, Optional, Type
 import jax.numpy as jnp
 import jax.random as jra
+import flax
 import numpyro
 from numpyro.infer import SVI, Trace_ELBO
 from numpyro.infer.autoguide import AutoDelta
@@ -18,20 +19,13 @@ class VIDKL(DKL):
     """
     Variational Inference-based Deep Kernel Learning
     """
-
     def __init__(self,
-                 latent_dim: int,
+                 architecture: Type[flax.linen.Module],
                  base_kernel: kernel_fn_type,
                  priors: Optional[GPPriors] = None,
-                 hidden_dim: List[int] = None,
-                 conv_layers: List[int] = None,
-                 input_dim: int = None,
-                 activation: str = 'tanh',
                  jitter: float = 1e-6
                  ) -> None:
-        super(VIDKL, self).__init__(
-            latent_dim, base_kernel, priors, hidden_dim,
-            conv_layers, input_dim, activation, jitter)
+        super(VIDKL, self).__init__(architecture, base_kernel, priors, jitter)
 
     def fit(self, X: jnp.ndarray, y: jnp.ndarray,
             num_steps: int = 1000, step_size: float = 5e-3,
