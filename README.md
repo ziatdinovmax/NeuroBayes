@@ -19,6 +19,7 @@ import neurobayes as nb
 
 # Initialize NN architecture
 architecture = FlaxMLP(hidden_dims = [64, 32, 16, 8], target_dim=1)
+
 # Initialize Bayesian model
 model = nb.BNN(architecture)
 # Train model
@@ -34,8 +35,9 @@ Partially Bayesian Neural Networks replace constant weights with probabilistic d
 # Number of probabilistic ('Bayesian') layers
 num_probabilistic_layers = 2 # two last learnable layers + output layer
 
-# Intitalize and train a PBNN model
+# Intitalize a PBNN model
 model = nb.PartialBNN(architecture, num_probabilistic_layers=num_probabilistic_layers)
+# Train
 model.fit(X_measured, y_measured, num_warmup=1000, num_samples=1000)
 # Make a prediction on unmeasured points or the full domain
 posterior_mean, posterior_var = model.predict(X_domain)
@@ -50,8 +52,6 @@ probabilistic_layer_names = ['Dense2', 'Dense3', 'Dense4']
 # Intitalize and train a PBNN model
 model = nb.PartialBNN(architecture, probabilistic_layer_names=probabilistic_layer_names)
 model.fit(X_measured, y_measured, num_warmup=1000, num_samples=1000)
-# Make a prediction on unmeasured points or the full domain
-posterior_mean, posterior_var = model.predict(X_domain)
 ```
 
 ![BNN_PBNN](https://github.com/user-attachments/assets/8281b071-4f05-4432-8e23-babcaaad6b5d)
