@@ -138,21 +138,33 @@ def get_flax_compatible_dict(params_numpyro: Dict[str, jnp.ndarray]) -> Dict[str
     """
     Takes a dictionary with MCMC samples produced by numpyro
     and creates a dictionary with weights and biases compatible
-    with flax .apply() method
+    with flax .apply() method.
     """
     params_all = {}
-    weights, biases = {}, {}
+    module_params = {} 
+    
+    # First pass: organize parameters by module
     for key, val in params_numpyro.items():
         if key.startswith('nn'):
-            layer, param = key.split('/')[-1].split('.')
+            module, layer, param = key.split('/')[-1].split('.')
+            if module not in module_params:
+                module_params[module] = {'weights': {}, 'biases': {}}
             if param == 'bias':
-                biases[layer] = val
+                module_params[module]['biases'][layer] = val
             else:
-                weights[layer] = val
+                module_params[module]['weights'][layer] = val
         else:
             params_all[key] = val
-    for (k, v1), (_, v2) in zip(weights.items(), biases.items()):
-        params_all[k] = {"kernel": v1, "bias": v2}
+    
+    # Second pass: combine weights and biases for each module
+    for module, params in module_params.items():
+        params_all[module] = {}
+        for (layer, w), (_, b) in zip(params['weights'].items(), params['biases'].items()):
+            params_all[module][layer] = {
+                "kernel": w,
+                "bias": b
+            }
+            
     return params_all
 
 

@@ -1,6 +1,7 @@
-from typing import Dict, Tuple, Callable, Optional, List
+from typing import Dict, Tuple, Callable, Optional, List, Type
 from jax import vmap
 import jax.numpy as jnp
+import flax
 import numpyro
 import numpyro.distributions as dist
 from numpyro.contrib.module import random_flax_module
@@ -19,22 +20,13 @@ class DKL(GP):
     Fully Bayesian Deep Kernel Learning
     """
     def __init__(self,
-                 latent_dim: int,
+                 architecture: Type[flax.linen.Module],
                  base_kernel: kernel_fn_type,
                  priors: Optional[GPPriors] = None,
-                 hidden_dim: List[int] = None,
-                 conv_layers: List[int] = None,
-                 input_dim: int = None,
-                 activation: str = 'tanh',
                  jitter: float = 1e-6
                  ) -> None:
         super(DKL, self).__init__(base_kernel, priors, jitter)
-        if conv_layers:
-            hdim = hidden_dim if hidden_dim is not None else [int(conv_layers[-1] * 2),]
-            self.nn = FlaxConvNet(input_dim, conv_layers, hdim, latent_dim, activation)
-        else:
-            hdim = hidden_dim if hidden_dim is not None else [32, 16, 8]
-            self.nn = FlaxMLP(hdim, latent_dim, activation)
+        self.nn = architecture
         
     def model(self,
               X: jnp.ndarray,
