@@ -9,7 +9,7 @@ import numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS, init_to_median, Predictive
 from numpyro.contrib.module import random_flax_module
 
-from ..utils.utils import put_on_device, split_dict
+from ..utils import put_on_device, flatten_params_dict
 
 
 class BNN:
@@ -48,18 +48,15 @@ class BNN:
               **kwargs) -> None:
         """BNN model"""
 
-        if self.pretrained_priors is not None:
-            pretrained_priors = {}
-            for module_dict in self.pretrained_priors.values():
-                pretrained_priors.update(module_dict)
-            self.pretrained_priors = pretrained_priors
+        pretrained_priors = (flatten_params_dict(self.pretrained_priors) 
+                           if self.pretrained_priors is not None else None)
         
         def prior(name, shape):
-            if self.pretrained_priors is not None:
+            if pretrained_priors is not None:
                 param_path = name.split('.')
-                layer_name = param_path[0]
+                layer_name = param_path[-2]
                 param_type = param_path[-1]  # kernel or bias
-                return dist.Normal(self.pretrained_priors[layer_name][param_type], priors_sigma)
+                return dist.Normal(pretrained_priors[layer_name][param_type], priors_sigma)
             return dist.Normal(0., priors_sigma)
         
         input_shape = X.shape[1:] if X.ndim > 2 else (X.shape[-1],)
