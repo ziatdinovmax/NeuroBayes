@@ -7,8 +7,9 @@ import flax
 
 from .bnn_heteroskedastic import HeteroskedasticBNN
 from ..flax_nets import DeterministicNN
-from ..flax_nets import FlaxMLP2Head, FlaxConvNet2Head
-from ..flax_nets import extract_mlp2head_configs, MLPLayerModule
+from ..flax_nets import FlaxMLP2Head, FlaxConvNet2Head, MLPLayerModule, ConvLayerModule
+from ..flax_nets import extract_configs
+from ..utils import flatten_params_dict
 
 
 
@@ -39,7 +40,7 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
         self.deterministic_nn = deterministic_nn
         self.deterministic_weights = deterministic_weights
 
-        self.layer_configs = extract_mlp2head_configs(
+        self.layer_configs = extract_configs(
             deterministic_nn, probabilistic_layer_names, num_probabilistic_layers)
 
     def model(self,
@@ -51,9 +52,7 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
         """Heteroskedastic (partial) BNN probabilistic model"""
 
         net = self.deterministic_nn
-        pretrained_priors = {}
-        for module_dict in self.deterministic_weights.values():
-            pretrained_priors.update(module_dict)
+        pretrained_priors = flatten_params_dict(self.deterministic_weights)
             
         def prior(name, shape):
             param_path = name.split('.')
@@ -62,20 +61,33 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
             return dist.Normal(pretrained_priors[layer_name][param_type], priors_sigma)
 
         current_input = X
+
+        # Track when we switch from conv to dense layers
+        last_conv_idx = max(
+            (i for i, c in enumerate(self.layer_configs) if c["layer_type"] == "conv"),
+            default=-1
+        )
         
-        # Process shared layers
         for idx, config in enumerate(self.layer_configs[:-2]):  # All but the two head layers
-            layer_name = config["layer_name"]
-            layer = MLPLayerModule(
+            layer_name = config['layer_name']
+            
+            # Flatten inputs after last conv layer
+            if idx > last_conv_idx and idx-1 == last_conv_idx:
+                current_input = current_input.reshape((current_input.shape[0], -1))
+
+            layer_cls = ConvLayerModule if config["layer_type"] == "conv" else MLPLayerModule
+            layer = layer_cls(
                 features=config['features'],
                 activation=config['activation'],
-                layer_name=layer_name
+                layer_name=layer_name,
+                **({"input_dim": config['input_dim'], 
+                    "kernel_size": config['kernel_size']} if config["layer_type"] == "conv" else {})
             )
             
             if config['is_probabilistic']:
                 net = random_flax_module(
                     layer_name, layer, 
-                    input_shape=(1, current_input.shape[-1]),
+                    input_shape=(1, *current_input.shape[1:]),
                     prior=prior
                 )
                 current_input = net(current_input)
@@ -139,7 +151,7 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
         else:
             params = {
                 "params": {
-                    "VarianceHead": {
+                    layer_name: {
                         "kernel": pretrained_priors[layer_name]["kernel"],
                         "bias": pretrained_priors[layer_name]["bias"]
                     }
@@ -159,7 +171,7 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
             num_chains: int = 1, chain_method: str = 'sequential',
             sgd_epochs: Optional[int] = None, sgd_lr: Optional[float] = 0.01,
             sgd_batch_size: Optional[int] = None, sgd_wa_epochs: Optional[int] = 10,
-            map_sigma: float = 1.0, priors_from_map: bool = False, priors_sigma: float = 1.0,
+            map_sigma: float = 1.0, priors_sigma: float = 1.0,
             progress_bar: bool = True, device: str = None, rng_key: Optional[jnp.array] = None,
             extra_fields: Optional[Tuple[str]] = ()
             ) -> None:
