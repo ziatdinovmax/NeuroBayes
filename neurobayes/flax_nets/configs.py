@@ -113,6 +113,7 @@ def extract_mlp2head_configs(
         "features": mlp.target_dim,
         "activation": None,
         "is_probabilistic": layer_name in probabilistic_layers,
+        "layer_type": "fc",
         "layer_name": layer_name
     })
     layer_name = "VarianceHead"
