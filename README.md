@@ -18,7 +18,7 @@ Fully Bayesian Neural Networks replace all constant weights in the network with 
 import neurobayes as nb
 
 # Initialize NN architecture
-architecture = FlaxMLP(hidden_dims = [64, 32, 16, 8], target_dim=1)
+architecture = nb.FlaxMLP(hidden_dims = [64, 32, 16, 8], target_dim=1)
 
 # Initialize Bayesian model
 model = nb.BNN(architecture)
