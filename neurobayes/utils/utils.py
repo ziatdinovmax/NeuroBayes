@@ -92,8 +92,8 @@ def rmse(y_pred: jnp.ndarray, y_true: jnp.ndarray) -> jnp.ndarray:
     """
     Calculates the root mean squared error between true and predicted values.
     """
-    mse = mse(y_pred, y_true)
-    return jnp.sqrt(mse)
+    mse_ = mse(y_pred, y_true)
+    return jnp.sqrt(mse_)
 
 
 def mae(y_pred: jnp.ndarray, y_true: jnp.ndarray) -> jnp.ndarray:
