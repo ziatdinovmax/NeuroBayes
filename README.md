@@ -1,7 +1,8 @@
 # NeuroBayes
 
-#### Important: This package is actively in development, and breaking changes may occur frequently
-
+> [!IMPORTANT]
+This package is actively in development, and breaking changes may occur frequently
+> 
 ![NB2](https://github.com/user-attachments/assets/a78fbcac-23e5-4073-afbd-d424a8f7d2dc)
 
 ## What is it for
