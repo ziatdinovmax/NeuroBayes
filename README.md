@@ -3,7 +3,8 @@
 > [!IMPORTANT]
 This package is actively in development, and breaking changes may occur frequently
 > 
-![NB2](https://github.com/user-attachments/assets/a78fbcac-23e5-4073-afbd-d424a8f7d2dc)
+
+![NB_logo2](https://github.com/user-attachments/assets/36e1ea05-83cb-41a9-a52e-cf73335dd499)
 
 ## What is it for
 Machine learning, at its core, is about approximating unknown functions – mapping inputs to outputs based on observed data. In scientific and engineering applications, this often means modeling complex relationships between process parameters and target properties. Traditionally, Gaussian Processes (GPs) have been favored in these domains for their ability to provide robust uncertainty estimates. However, GPs struggle with systems featuring discontinuities and non-stationarities, common in physical science problems, as well as with high dimensional data. **NeuroBayes** bridges this gap by combining the flexibility and scalability of neural networks with the rigorous uncertainty quantification of Bayesian methods. This repository enables the use of full BNNs and partial BNNs with the No-U-Turn Sampler for intermediate size datasets, making it a powerful tool for a wide range of scientific and engineering applications.
@@ -11,6 +12,9 @@ Machine learning, at its core, is about approximating unknown functions – mapp
 
 ## How to use
 NeuroBayes provides two main approaches for implementing Bayesian Neural Networks: Fully Bayesian Neural Networks (BNN) and Partially Bayesian Neural Networks (PBNN). Both approaches currently support MLP and ConvNet architectures, with more architectures on the way. Here's how to use BNN and PBNN:
+
+![NN_types](https://github.com/user-attachments/assets/9b58d9ec-cb7f-49de-aa58-e75990b08b83)
+
 
 ### Fully Bayesian Neural Nets
 Fully Bayesian Neural Networks replace all constant weights in the network with probabilistic distributions. This approach provides comprehensive uncertainty quantification but may be computationally intensive for large models.
@@ -88,6 +92,9 @@ posterior_mean, posterior_var = model.predict(X_domain)
 See example [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/heteroskedastic.ipynb).
 
 ### Pre-trained priors
+
+![Transfer_learning](https://github.com/user-attachments/assets/b3e2d7da-7bb1-4919-8140-899795ac042d)
+
 NeuroBayes extends the concept of partial BNNs to leverage pre-existing knowledge or simulations, allowing for more informed priors in Bayesian Neural Networks. This approach is particularly useful when you have theoretical models or simulations that can guide the learning process for experimental data.
 The process involves two main steps:
 
