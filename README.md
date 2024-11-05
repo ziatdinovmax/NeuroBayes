@@ -132,3 +132,37 @@ This approach allows you to incorporate domain knowledge or theoretical models i
 ![pretrained_priors](https://github.com/user-attachments/assets/33f80877-4a5c-46d2-ba5d-ee540418e21b)
 
 See example [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/pretrained_priors.ipynb).
+
+### Comparison with GP-based methods
+NeuroBayes provides implementations of Gaussian Process (GP) and Deep Kernel Learning (DKL) models for comparison with BNN approaches. These implementations support both fully Bayesian and variational inference methods.
+
+Gaussian Process:
+
+```python3
+# Specify kernel
+kernel = nb.kernels.MaternKernel
+# Initialize GP model
+model = nb.GP(kernel)
+# Train the same way as BNN
+model.fit(X_measured, y_measured, num_warmup=1000, num_samples=1000)
+# Make a prediction the same way as with BNN
+posterior_mean, posterior_var = model.predict(X_domain)
+```
+
+Deep Kernel Learning:
+
+```python3
+# Set a number of latent dimensions
+latent_dim = 2
+# Initialize NN architecture for the feature extractor part of the DKL
+architecture = nb.FlaxMLP(hidden_dims = [64, 32, 16, 8], target_dim=latent_dim)
+# Specify kernel for the GP part of DKL
+kernel = nb.kernels.MaternKernel
+
+# Initialize DKL model
+model = nb.DKL(net, kernel)
+# Train and make a prediction the same way as with GP and BNN
+model.fit(X_measured, y_measured, num_warmup=1000, num_samples=1000)
+posterior_mean, posterior_var = model.predict(X_domain)
+```
+The training and prediction interface is consistent across all model types (BNN, PBNN, GP, and DKL) in NeuroBayes, making it easy to compare different approaches for your specific use case.
