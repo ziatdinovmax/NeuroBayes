@@ -118,7 +118,6 @@ class DeterministicNN:
                 pbar.set_postfix_str(f"Epoch {epoch+1}/{epochs}, Avg Loss: {avg_epoch_loss:.4f}")
                 pbar.update(1)
         timestr = time.strftime("%Y%m%d-%H%M%S")
-        np.savez(f'avg_epoch_losses_{timestr}.npz', loss=avg_epoch_losses)
         if self.params_history:  # Ensure there is something to average
             self.state = self.state.replace(params=self.average_params())
 
