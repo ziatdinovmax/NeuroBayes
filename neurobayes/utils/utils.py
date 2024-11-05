@@ -81,7 +81,8 @@ def split_dict(data: Dict[str, jnp.ndarray], chunk_size: int
     return result
 
 def monitor_dnn_loss(loss: np.ndarray) -> bool:
-    if np.diff(loss)[0] / loss[0] < -0.25:
+    loss = loss[loss != 0]
+    if np.diff(loss)[-1] / loss[0] < -0.25:
         warnings.warn('The deterministic training loss is decreasing rapidly - learning and accuracy may be improved by increasing the batch size, adjusting MAP sigma, or modifying the learning rate.')
     return
 
