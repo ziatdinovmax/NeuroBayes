@@ -166,3 +166,11 @@ model.fit(X_measured, y_measured, num_warmup=1000, num_samples=1000)
 posterior_mean, posterior_var = model.predict(X_domain)
 ```
 The training and prediction interface is consistent across all model types (BNN, PBNN, GP, and DKL) in NeuroBayes, making it easy to compare different approaches for your specific use case.
+
+### Surrogate model recommender
+
+I made a simple tool to guide the selection of a surrogate model (between BNN, PBNN, DKL, and GP) in the active learning setting:
+
+https://surrogate-model-selector.vercel.app/
+
+Note: It reflects typical behaviors based on active learning requirements like training time per iteration, but model performance can vary significantly based on implementation details, hyperparameter tuning, and specific problem characteristics.
