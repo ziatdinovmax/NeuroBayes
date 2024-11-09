@@ -174,3 +174,17 @@ I made a simple tool to guide the selection of a surrogate model (between BNN, P
 https://surrogate-model-selector.vercel.app/
 
 Note: It reflects typical behaviors based on active learning requirements like training time per iteration, but model performance can vary significantly based on implementation details, hyperparameter tuning, and specific problem characteristics.
+
+## Installation
+To install NeuroBayes, use either
+```bash
+git clone https://github.com/ziatdinovmax/NeuroBayes.git
+cd NeuroBayes
+pip install -e .
+```
+
+or
+
+```bash
+pip install git+https://github.com/ziatdinovmax/NeuroBayes.git
+```
