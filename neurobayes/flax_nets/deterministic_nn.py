@@ -6,8 +6,9 @@ from flax.training import train_state
 import optax
 from functools import partial
 from tqdm import tqdm
+import numpy as np
 
-from ..utils.utils import split_in_batches
+from ..utils.utils import split_in_batches, monitor_dnn_loss
 
 
 class TrainState(train_state.TrainState):
@@ -97,20 +98,24 @@ class DeterministicNN:
         num_batches = len(X_batches)
         
         with tqdm(total=epochs, desc="Training Progress", leave=True) as pbar:  # Progress bar tracks epochs now
+            avg_epoch_losses = np.zeros(epochs) 
             for epoch in range(epochs):
                 epoch_loss = 0.0
                 for i, (X_batch, y_batch) in enumerate(zip(X_batches, y_batches)):
                     self.state, batch_loss = self.train_step(self.state, X_batch, y_batch)
                     epoch_loss += batch_loss
-
+                
                 # Start storing parameters in the last n epochs
                 if epochs - epoch <= self.average_last_n_weights:
                     self._store_params(self.state.params)
                 
                 avg_epoch_loss = epoch_loss / num_batches
+                avg_epoch_losses[epoch] = avg_epoch_loss
+                if epoch > 0:
+                    monitor_dnn_loss(avg_epoch_losses)
+
                 pbar.set_postfix_str(f"Epoch {epoch+1}/{epochs}, Avg Loss: {avg_epoch_loss:.4f}")
                 pbar.update(1)
-
         if self.params_history:  # Ensure there is something to average
             self.state = self.state.replace(params=self.average_params())
 

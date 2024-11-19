@@ -5,6 +5,7 @@ import jax.numpy as jnp
 
 import numpy as np
 
+import warnings
 
 def infer_device(device_preference: str = None):
     """
@@ -79,6 +80,13 @@ def split_dict(data: Dict[str, jnp.ndarray], chunk_size: int
 
     return result
 
+def monitor_dnn_loss(loss: np.ndarray) -> None:
+    """Checks whether current change in loss is greater than a 25% decrease"""
+    loss = loss[loss != 0]
+    if len(loss) > 1:
+      if np.diff(loss)[-1] / loss[0] < -0.25:
+          warnings.warn('The deterministic training loss is decreasing rapidly - learning and accuracy may be improved by increasing the batch size, increasing MAP sigma, or adjusting the learning rate.', stacklevel=2)
+    return
 
 def mse(y_pred: jnp.ndarray, y_true: jnp.ndarray) -> jnp.ndarray:
     """
