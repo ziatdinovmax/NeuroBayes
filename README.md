@@ -66,6 +66,9 @@ The obtained posterior means and variances can be used in active learning and Ba
 ### Heteroskedastic noise
 By default, we assume constant observation noise across all inputs. However, this assumption often doesn't hold in real-world datasets which may exhibit input-dependent levels of noise. NeuroBayes offers heteroskedastic BNNs that can capture varying levels of noise in different regions of the data, allowing for more accurate uncertainty quantification.
 
+![heteroskedastic](https://github.com/user-attachments/assets/7d02a138-02b5-41e1-abbc-e9a3afa7a972)
+
+
 The usage of a heteroskedastic BNN is straightforward and follows the same pattern as the standard BNN models:
 
 For fully Bayesian heteroskedastic NN:
