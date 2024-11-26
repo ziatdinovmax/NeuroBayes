@@ -64,10 +64,13 @@ class HeteroskedasticBNN(BNN):
 
     def predict_noise(self, X_new: jnp.ndarray,
                       device: Optional[str] = None) -> jnp.ndarray:
-        """Predict likely values of noise for new data"""
+        """
+        Predict likely values of noise for new data
+        and associated uncertainty in the noise prediction
+        """
         X_new = self.set_data(X_new)
         samples = self.get_samples()
         X_new, samples = put_on_device(device, X_new, samples)
         pred = self.sample_from_posterior(
             jra.PRNGKey(0), X_new, samples, return_sites=['sig'])
-        return pred['sig'].mean(0)
+        return pred['sig'].mean(0), pred['sig'].var(0)
