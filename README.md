@@ -93,6 +93,10 @@ model.fit(X_measured, y_measured, sgd_epochs=5000, sgd_lr=5e-3, num_warmup=1000,
 posterior_mean, posterior_var = model.predict(X_domain)
 ```
 
+![hsk](https://github.com/user-attachments/assets/5a619361-74c0-4d03-9b1a-4aa995f1c540)
+
+See example [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/heteroskedastic.ipynb).
+
 Sometimes in scientific and engineering applciations, domain experts may possess prior knowledge about how noise level varies with inputs. NeuroBayes enables the integration of such knowledge through a noise model-based heteroskedastic Bayesian Neural Network (BNN). 
 
 ```python3
@@ -111,10 +115,7 @@ architecture = nb.FlaxMLP(hidden_dims, target_dim)
 model = nb.VarianceModelHeteroskedasticBNN(architecture, noise_model, noise_model_prior)
 model.fit(X_measured, y_measured, num_warmup=1000, num_samples=1000)
 ```
-
-![hsk](https://github.com/user-attachments/assets/5a619361-74c0-4d03-9b1a-4aa995f1c540)
-
-See example [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/heteroskedastic.ipynb).
+See example [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/heteroskedastic_noisemodel.ipynb).
 
 ### Pre-trained priors
 
