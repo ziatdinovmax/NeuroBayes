@@ -97,6 +97,7 @@ posterior_mean, posterior_var = model.predict(X_domain)
 
 See example [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/heteroskedastic.ipynb).
 
+#### Heteroskedastic noise model
 Sometimes in scientific and engineering applciations, domain experts may possess prior knowledge about how noise level varies with inputs. NeuroBayes enables the integration of such knowledge through a noise model-based heteroskedastic Bayesian Neural Network (BNN). 
 
 ```python3
