@@ -61,7 +61,11 @@ model.fit(X_measured, y_measured, num_warmup=1000, num_samples=1000)
 
 ![BNN_PBNN](https://github.com/user-attachments/assets/8281b071-4f05-4432-8e23-babcaaad6b5d)
 
-The obtained posterior means and variances can be used in active learning and Bayesian optimization frameworks. See example of BNN-powered active learning [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/bnn_example1d.ipynb) and example of PBNN-powered active learning [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/pbnn_example1d.ipynb).
+The obtained posterior means and variances can be used in active learning and Bayesian optimization frameworks. 
+
+An example of applying PBNN to a toy regression problem can be found [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/partialBNN_simple_regression.ipynb).
+
+See also examples of BNN-powered active learning [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/bnn_example1d.ipynb) and PBNN-powered active learning [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/pbnn_example1d.ipynb).
     
 ### Heteroskedastic noise
 By default, we assume constant observation noise across all inputs. However, this assumption often doesn't hold in real-world datasets which may exhibit input-dependent levels of noise. NeuroBayes offers heteroskedastic BNNs that can capture varying levels of noise in different regions of the data, allowing for more accurate uncertainty quantification.
