@@ -287,4 +287,6 @@ def plot_rhats(samples):
     sgr = numpyro.diagnostics.split_gelman_rubin
     rhats = [sgr(v).flatten() for (k, v) in samples.items() if k.endswith('kernel')]
     rhats = np.concatenate(rhats)
-    plt.hist(rhats, bins=20, color='green', alpha=0.6);
+    plt.hist(rhats, bins=20, color='green', alpha=0.6)
+    plt.xlabel('r_hat', fontsize=14)
+    plt.ylabel('Count', fontsize=14)
