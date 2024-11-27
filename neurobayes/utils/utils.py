@@ -7,8 +7,12 @@ import jax
 import jax.numpy as jnp
 
 import numpy as np
+import matplotlib.pyplot as plt
+
+import numpyro
 
 import warnings
+
 
 def infer_device(device_preference: str = None):
     """
@@ -244,7 +248,7 @@ def flatten_params_dict(params_dict: Dict[str, Any]) -> Dict[str, Any]:
 
 def set_fn(func: Callable) -> Callable:
     """
-    Transforms the given deterministic function to use a params dictionary
+    Transforms a given deterministic function to use a params dictionary
     for its parameters, excluding the first one (assumed to be the dependent variable).
 
     Args:
@@ -277,3 +281,10 @@ def set_fn(func: Callable) -> Callable:
 
     # Return the transformed function
     return local_namespace[func.__name__]
+
+
+def plot_rhats(samples):
+    sgr = numpyro.diagnostics.split_gelman_rubin
+    rhats = [sgr(v).flatten() for (k, v) in samples.items() if k.endswith('kernel')]
+    rhats = np.concatenate(rhats)
+    plt.hist(rhats, bins=20, color='green', alpha=0.6);
