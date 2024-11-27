@@ -98,7 +98,7 @@ class DeterministicNN:
         num_batches = len(X_batches)
         
         with tqdm(total=epochs, desc="Training Progress", leave=True) as pbar:  # Progress bar tracks epochs now
-            avg_epoch_losses = np.zeros(epochs) 
+            #avg_epoch_losses = np.zeros(epochs) 
             for epoch in range(epochs):
                 epoch_loss = 0.0
                 for i, (X_batch, y_batch) in enumerate(zip(X_batches, y_batches)):
@@ -110,9 +110,10 @@ class DeterministicNN:
                     self._store_params(self.state.params)
                 
                 avg_epoch_loss = epoch_loss / num_batches
-                avg_epoch_losses[epoch] = avg_epoch_loss
-                if epoch > 0:
-                    monitor_dnn_loss(avg_epoch_losses)
+                
+                #avg_epoch_losses[epoch] = avg_epoch_loss
+                # if epoch > 0:
+                #     monitor_dnn_loss(avg_epoch_losses)
 
                 pbar.set_postfix_str(f"Epoch {epoch+1}/{epochs}, Avg Loss: {avg_epoch_loss:.4f}")
                 pbar.update(1)
