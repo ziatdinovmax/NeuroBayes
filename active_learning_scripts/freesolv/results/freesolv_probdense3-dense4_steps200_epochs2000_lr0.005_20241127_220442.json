@@ -1,0 +1,23 @@
+{
+  "parameters": {
+    "seeds": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "exploration_steps": 200,
+    "sgd_epochs": 2000,
+    "sgd_lr": 0.005,
+    "probabilistic_layer_names": [
+      "Dense3",
+      "Dense4"
+    ],
+    "output_dir": "results",
+    "input_file": "freesolv.npz",
+    "experiment_name": "freesolv"
+  },
+  "timestamp": "2024-11-27T22:04:42.294536",
+  "results_file": "freesolv_probdense3-dense4_steps200_epochs2000_lr0.005_20241127_220442.pkl"
+}

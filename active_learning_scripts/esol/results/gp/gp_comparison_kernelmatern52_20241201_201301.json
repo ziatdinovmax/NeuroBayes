@@ -1,0 +1,23 @@
+{
+  "parameters": {
+    "kernels": [
+      "matern52"
+    ],
+    "seeds": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "exploration_steps": 200,
+    "num_epochs": 1000,
+    "learning_rate": 0.01,
+    "output_dir": "results/gp",
+    "input_file": "esol.npz",
+    "experiment_name": "gp_comparison",
+    "kernel": "matern52"
+  },
+  "timestamp": "2024-12-01T20:13:01.978353",
+  "results_file": "gp_comparison_kernelmatern52_20241201_201301.pkl"
+}

@@ -1,0 +1,23 @@
+{
+  "parameters": {
+    "seeds": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "exploration_steps": 200,
+    "sgd_epochs": 2000,
+    "sgd_lr": 0.005,
+    "probabilistic_layer_names": [
+      "Dense1",
+      "Dense4"
+    ],
+    "output_dir": "results",
+    "input_file": "esol.npz",
+    "experiment_name": "esol"
+  },
+  "timestamp": "2024-12-01T19:36:26.905488",
+  "results_file": "esol_probdense1-dense4_steps200_epochs2000_lr0.005_20241201_193626.pkl"
+}

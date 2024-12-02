@@ -1,0 +1,25 @@
+{
+  "parameters": {
+    "latent_dims": [
+      2,
+      4
+    ],
+    "seeds": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "exploration_steps": 200,
+    "num_epochs": 1000,
+    "learning_rate": 0.01,
+    "output_dir": "results/dkl",
+    "input_file": "hopv15.npz",
+    "activation": "relu",
+    "experiment_name": "hopv_dkl_comparison",
+    "latent_dim": 4
+  },
+  "timestamp": "2024-12-01T22:35:40.270106",
+  "results_file": "hopv_dkl_comparison_latent4_relu_20241201_223540.pkl"
+}
