@@ -43,6 +43,8 @@ class ExplorationConfig:
     probabilistic_layer_names: List[str]
     output_dir: Path
     input_file: Path
+    hidden_dims: List[int]  # New: configurable hidden dimensions
+    activation: str  # New: configurable activation function
     experiment_name: str = "esol"
     
     def get_output_filename(self) -> Path:
@@ -52,7 +54,8 @@ class ExplorationConfig:
         layer_str = "-".join(l.lower() for l in self.probabilistic_layer_names)
         params = f"prob{layer_str}_steps{self.exploration_steps}_epochs{self.sgd_epochs}_lr{self.sgd_lr}"
         return self.output_dir / f"{self.experiment_name}_{params}_{timestamp}.pkl"
-
+    
+        
 class DataProcessor:
     """Handles data loading and preprocessing."""
     
@@ -93,7 +96,11 @@ class ActiveLearner:
         
     def _init_model(self) -> None:
         """Initialize the neural network model."""
-        net = FlaxMLP(hidden_dims=[32, 16, 8, 8], target_dim=1)
+        net = FlaxMLP(
+            hidden_dims=self.config.hidden_dims,
+            target_dim=1,
+            activation=self.config.activation
+        )
         self.model = PartialBNN(
             net, 
             probabilistic_layer_names=self.config.probabilistic_layer_names
@@ -244,6 +251,20 @@ def parse_arguments() -> ExplorationConfig:
         help="Names of layers to make probabilistic (e.g., Dense0 Dense4)"
     )
     parser.add_argument(
+        "--hidden-dims",
+        nargs="+",
+        type=int,
+        default=[32, 16, 8, 8],
+        help="Dimensions of hidden layers (e.g., 32 16 8 8)"
+    )
+    parser.add_argument(
+        "--activation",
+        type=str,
+        choices=['tanh', 'silu'],
+        default='tanh',
+        help="Activation function to use in the neural network"
+    )
+    parser.add_argument(
         "--output-dir",
         type=Path,
         default=Path("results"),
@@ -268,6 +289,7 @@ def parse_arguments() -> ExplorationConfig:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     
     return ExplorationConfig(**vars(args))
+
 
 def main():
     """Main execution function."""
