@@ -315,7 +315,7 @@ def main():
         "--activation",
         type=str,
         choices=["tanh", "relu", "silu"],
-        default="tanh",
+        default="silu",
         help="Activation function to use"
     )
     parser.add_argument(

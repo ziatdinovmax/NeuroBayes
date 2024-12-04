@@ -1,0 +1,25 @@
+{
+  "parameters": {
+    "latent_dims": [
+      2,
+      4
+    ],
+    "seeds": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "exploration_steps": 200,
+    "num_epochs": 1000,
+    "learning_rate": 0.01,
+    "output_dir": "results/dkl",
+    "input_file": "freesolv.npz",
+    "activation": "tanh",
+    "experiment_name": "freesolv_dkl_comparison",
+    "latent_dim": 4
+  },
+  "timestamp": "2024-12-02T20:41:10.948744",
+  "results_file": "freesolv_dkl_comparison_latent4_tanh_20241202_204110.pkl"
+}
