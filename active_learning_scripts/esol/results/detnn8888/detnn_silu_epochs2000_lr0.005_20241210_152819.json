@@ -1,0 +1,26 @@
+{
+  "parameters": {
+    "hidden_dims": [
+      8,
+      8,
+      8,
+      8
+    ],
+    "learning_rate": 0.005,
+    "epochs": 2000,
+    "batch_size": 16,
+    "seeds": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "use_map": true,
+    "output_dir": "results/detnn8888",
+    "pbnn_results_file": "results/pbnn321688/esol_probdense1-dense4_steps200_epochs2000_lr0.005_20241201_193626.pkl",
+    "activation": "silu"
+  },
+  "timestamp": "2024-12-10T15:28:19.932629",
+  "results_file": "detnn_silu_epochs2000_lr0.005_20241210_152819.pkl"
+}
