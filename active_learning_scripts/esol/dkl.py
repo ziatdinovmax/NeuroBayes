@@ -12,6 +12,7 @@ from dataclasses import dataclass, asdict
 from typing import List, Dict, Tuple
 import json
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 import pickle
 
 # Configure logging
@@ -70,11 +71,11 @@ class DKLFeatureExtractor(torch.nn.Sequential):
         act_fn = activation_map[activation.lower()]
         
         # Build network with specified activation function
-        self.add_module('linear1', torch.nn.Linear(input_dim, 32))
+        self.add_module('linear1', torch.nn.Linear(input_dim, 8))
         self.add_module('act1', act_fn())
-        self.add_module('linear2', torch.nn.Linear(32, 16))
+        self.add_module('linear2', torch.nn.Linear(8, 8))
         self.add_module('act2', act_fn())
-        self.add_module('linear3', torch.nn.Linear(16, 8))
+        self.add_module('linear3', torch.nn.Linear(8, 8))
         self.add_module('act3', act_fn())
         self.add_module('linear4', torch.nn.Linear(8, 8))
         self.add_module('act4', act_fn())
@@ -82,25 +83,25 @@ class DKLFeatureExtractor(torch.nn.Sequential):
 
 
 class GPModel(gpytorch.models.ExactGP):
-    """Gaussian Process model using RBF kernel."""
-    
-    def __init__(
-        self,
-        train_x: torch.Tensor,
-        train_y: torch.Tensor,
-        feature_extractor: torch.nn.Module,
-        likelihood: gpytorch.likelihoods.Likelihood
-    ):
-        super().__init__(train_x, train_y, likelihood)
-        self.mean_module = gpytorch.means.ConstantMean()
-        self.covar_module = gpytorch.kernels.RBFKernel()
-        self.feature_extractor = feature_extractor
-        
-    def forward(self, x: torch.Tensor) -> gpytorch.distributions.MultivariateNormal:
-        features = self.feature_extractor(x)
-        mean = self.mean_module(features)
-        covar = self.covar_module(features)
-        return gpytorch.distributions.MultivariateNormal(mean, covar)
+        def __init__(self, train_x, train_y, feature_extractor, latent_dim, likelihood):
+            super(GPModel, self).__init__(train_x, train_y, likelihood)
+            self.mean_module = gpytorch.means.ConstantMean()
+            self.covar_module = gpytorch.kernels.ScaleKernel(
+                gpytorch.kernels.RBFKernel(ard_num_dims=latent_dim))
+                
+            self.feature_extractor = feature_extractor
+
+            # This module will scale the NN features so that they're nice values
+            self.scale_to_bounds = gpytorch.utils.grid.ScaleToBounds(-1., 1.)
+
+        def forward(self, x):
+            # We're first putting our data through a deep net (feature extractor)
+            projected_x = self.feature_extractor(x)
+            projected_x = self.scale_to_bounds(projected_x)  # Make the NN values "nice"
+
+            mean_x = self.mean_module(projected_x)
+            covar_x = self.covar_module(projected_x)
+            return gpytorch.distributions.MultivariateNormal(mean_x, covar_x)
     
 
 class DKLExplorer:
@@ -123,7 +124,7 @@ class DKLExplorer:
             latent_dim,
             activation=self.config.activation
         )
-        model = GPModel(X_train, y_train, feature_extractor, likelihood)
+        model = GPModel(X_train, y_train, feature_extractor, latent_dim, likelihood)
         
         return model.to(self.device), likelihood.to(self.device)
     
@@ -179,10 +180,9 @@ class DKLExplorer:
         mae = torch.mean(torch.abs(y_true - y_pred)).item()
         
         # Calculate NLPD
-        nlpd = 0.5 * torch.mean(
-            torch.log(2 * np.pi * variance) + 
-            (y_true - y_pred) ** 2 / variance
-        ).item()
+        const = -0.5 * torch.log(2 * np.pi * variance)
+        prob_density = -0.5 * (y_true - y_pred) ** 2 / variance
+        nlpd = -torch.mean(const + prob_density).item()
         
         # Calculate 95% coverage
         z_score = 1.96
@@ -283,7 +283,7 @@ def main():
         "--latent-dims",
         nargs="+",
         type=int,
-        default=[2, 4],
+        default=[2,],
         help="List of latent dimensions to test"
     )
     parser.add_argument(
@@ -302,7 +302,7 @@ def main():
     parser.add_argument(
         "--num-epochs",
         type=int,
-        default=1000,
+        default=100,
         help="Number of training epochs per step"
     )
     parser.add_argument(
@@ -315,13 +315,13 @@ def main():
         "--activation",
         type=str,
         choices=["tanh", "relu", "silu"],
-        default="tanh",
+        default="silu",
         help="Activation function to use"
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("results/dkl"),
+        default=Path("results/dkl8888"),
         help="Directory to save results"
     )
     parser.add_argument(
@@ -333,7 +333,7 @@ def main():
     parser.add_argument(
         "--experiment-name",
         type=str,
-        default="esol_dkl_comparison",
+        default="esol_dkl",
         help="Name for this experiment"
     )
     
@@ -346,6 +346,9 @@ def main():
         # Load data
         data = np.load(config.input_file)
         X, y = data["features"], data["targets"]
+
+        x_scaler = StandardScaler()
+        X = x_scaler.fit_transform(X)
         
         explorer = DKLExplorer(config)
         

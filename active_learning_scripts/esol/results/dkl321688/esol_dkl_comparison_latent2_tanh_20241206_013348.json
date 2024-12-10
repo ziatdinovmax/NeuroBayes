@@ -1,8 +1,7 @@
 {
   "parameters": {
     "latent_dims": [
-      2,
-      4
+      2
     ],
     "seeds": [
       1,
@@ -12,14 +11,14 @@
       5
     ],
     "exploration_steps": 200,
-    "num_epochs": 1000,
+    "num_epochs": 100,
     "learning_rate": 0.01,
     "output_dir": "results/dkl",
     "input_file": "esol.npz",
-    "activation": "relu",
+    "activation": "tanh",
     "experiment_name": "esol_dkl_comparison",
-    "latent_dim": 4
+    "latent_dim": 2
   },
-  "timestamp": "2024-12-01T21:19:44.989281",
-  "results_file": "esol_dkl_comparison_latent4_relu_20241201_211944.pkl"
+  "timestamp": "2024-12-06T01:33:48.840444",
+  "results_file": "esol_dkl_comparison_latent2_tanh_20241206_013348.pkl"
 }

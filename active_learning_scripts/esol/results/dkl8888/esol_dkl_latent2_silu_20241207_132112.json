@@ -1,8 +1,7 @@
 {
   "parameters": {
     "latent_dims": [
-      2,
-      4
+      2
     ],
     "seeds": [
       1,
@@ -12,14 +11,14 @@
       5
     ],
     "exploration_steps": 200,
-    "num_epochs": 1000,
+    "num_epochs": 100,
     "learning_rate": 0.01,
-    "output_dir": "results/dkl",
+    "output_dir": "results/dkl8888",
     "input_file": "esol.npz",
     "activation": "silu",
-    "experiment_name": "esol_dkl_comparison",
+    "experiment_name": "esol_dkl",
     "latent_dim": 2
   },
-  "timestamp": "2024-12-02T17:00:42.015468",
-  "results_file": "esol_dkl_comparison_latent2_silu_20241202_170042.pkl"
+  "timestamp": "2024-12-07T13:21:12.858907",
+  "results_file": "esol_dkl_latent2_silu_20241207_132112.pkl"
 }

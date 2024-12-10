@@ -1,0 +1,30 @@
+{
+  "parameters": {
+    "seeds": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "exploration_steps": 200,
+    "sgd_epochs": 2000,
+    "sgd_lr": 0.005,
+    "probabilistic_layer_names": [
+      "Dense3",
+      "Dense4"
+    ],
+    "output_dir": "results/pbnn8888",
+    "input_file": "esol.npz",
+    "hidden_dims": [
+      8,
+      8,
+      8,
+      8
+    ],
+    "activation": "silu",
+    "experiment_name": "esol"
+  },
+  "timestamp": "2024-12-06T22:05:27.184928",
+  "results_file": "esol_probdense3-dense4_steps200_epochs2000_lr0.005_20241206_220527.pkl"
+}

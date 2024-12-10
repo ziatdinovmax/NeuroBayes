@@ -228,7 +228,7 @@ def parse_arguments() -> ExplorationConfig:
     parser.add_argument(
         "--exploration_steps",
         type=int,
-        default=200,
+        default=1,
         help="Number of exploration steps"
     )
     parser.add_argument(
@@ -247,27 +247,27 @@ def parse_arguments() -> ExplorationConfig:
         "--probabilistic-layer-names",
         nargs="+",
         type=str,
-        default=['Dense1', 'Dense4'],
+        default=['Dense2', 'Dense4'],
         help="Names of layers to make probabilistic (e.g., Dense0 Dense4)"
     )
     parser.add_argument(
         "--hidden-dims",
         nargs="+",
         type=int,
-        default=[32, 16, 8, 8],
+        default=[8, 8, 8, 8],
         help="Dimensions of hidden layers (e.g., 32 16 8 8)"
     )
     parser.add_argument(
         "--activation",
         type=str,
         choices=['tanh', 'silu'],
-        default='tanh',
+        default='silu',
         help="Activation function to use in the neural network"
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("results"),
+        default=Path("results/pbnn8888"),
         help="Directory to save results"
     )
     parser.add_argument(
