@@ -1,0 +1,24 @@
+{
+  "parameters": {
+    "seeds": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "exploration_steps": 200,
+    "output_dir": "results/bnn8888",
+    "input_file": "fatigue.npz",
+    "hidden_dims": [
+      8,
+      8,
+      8,
+      8
+    ],
+    "activation": "silu",
+    "experiment_name": "fatigue"
+  },
+  "timestamp": "2024-12-12T22:04:24.260271",
+  "results_file": "fatigue_steps200_20241212_220424.pkl"
+}

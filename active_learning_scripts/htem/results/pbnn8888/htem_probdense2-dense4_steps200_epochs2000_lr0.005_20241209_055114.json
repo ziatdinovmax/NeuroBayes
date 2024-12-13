@@ -1,0 +1,30 @@
+{
+  "parameters": {
+    "seeds": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "exploration_steps": 200,
+    "sgd_epochs": 2000,
+    "sgd_lr": 0.005,
+    "probabilistic_layer_names": [
+      "Dense2",
+      "Dense4"
+    ],
+    "output_dir": "results/pbnn8888",
+    "input_file": "htem.npz",
+    "hidden_dims": [
+      8,
+      8,
+      8,
+      8
+    ],
+    "activation": "silu",
+    "experiment_name": "htem"
+  },
+  "timestamp": "2024-12-09T05:51:14.368203",
+  "results_file": "htem_probdense2-dense4_steps200_epochs2000_lr0.005_20241209_055114.pkl"
+}

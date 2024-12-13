@@ -1,0 +1,24 @@
+{
+  "parameters": {
+    "seeds": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "exploration_steps": 200,
+    "output_dir": "results/bnn8888",
+    "input_file": "freesolv.npz",
+    "hidden_dims": [
+      8,
+      8,
+      8,
+      8
+    ],
+    "activation": "silu",
+    "experiment_name": "freesolv"
+  },
+  "timestamp": "2024-12-12T05:59:47.679062",
+  "results_file": "freesolv_steps200_20241212_055947.pkl"
+}

@@ -11,6 +11,7 @@ from dataclasses import dataclass, asdict
 from typing import List, Dict, Any, Optional, Tuple
 import json
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 import pickle
 import datetime
 
@@ -291,7 +292,7 @@ def main():
     parser.add_argument(
         "--experiment-name",
         type=str,
-        default="gp_comparison",
+        default="freesolv_gp_comparison",
         help="Name for this experiment"
     )
     
@@ -304,6 +305,9 @@ def main():
         # Load data
         data = np.load(config.input_file)
         X, y = data["features"], data["targets"]
+
+        x_scaler = StandardScaler()
+        X = x_scaler.fit_transform(X)
         
         explorer = GPExplorer(config)
         

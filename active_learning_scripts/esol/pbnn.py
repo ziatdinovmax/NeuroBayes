@@ -228,7 +228,7 @@ def parse_arguments() -> ExplorationConfig:
     parser.add_argument(
         "--exploration_steps",
         type=int,
-        default=1,
+        default=200,
         help="Number of exploration steps"
     )
     parser.add_argument(

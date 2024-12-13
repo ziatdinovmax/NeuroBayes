@@ -1,0 +1,25 @@
+{
+  "parameters": {
+    "latent_dims": [
+      2,
+      4
+    ],
+    "seeds": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "exploration_steps": 200,
+    "num_epochs": 1000,
+    "learning_rate": 0.01,
+    "output_dir": "results/dkl",
+    "input_file": "freesolv.npz",
+    "activation": "silu",
+    "experiment_name": "freesolv_dkl_comparison",
+    "latent_dim": 2
+  },
+  "timestamp": "2024-12-05T15:51:14.662277",
+  "results_file": "freesolv_dkl_comparison_latent2_silu_20241205_155114.pkl"
+}

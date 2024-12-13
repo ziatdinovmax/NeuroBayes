@@ -1,0 +1,33 @@
+{
+  "parameters": {
+    "model_type": "rf",
+    "hidden_dims": [
+      8,
+      8,
+      8,
+      8
+    ],
+    "learning_rate": 0.005,
+    "epochs": 2000,
+    "batch_size": null,
+    "seeds": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "use_map": true,
+    "output_dir": "results/rf",
+    "pbnn_results_file": "results/pbnn8888/esol_probdense0-dense4_steps200_epochs2000_lr0.005_20241207_015431.pkl",
+    "activation": "silu",
+    "n_estimators": 500,
+    "max_depth": 20,
+    "min_samples_split": 5,
+    "min_samples_leaf": 3,
+    "max_features": "sqrt",
+    "bootstrap": true
+  },
+  "timestamp": "2024-12-10T20:11:05.485221",
+  "results_file": "rf_epochs2000_lr0.005_20241210_201105.pkl"
+}

@@ -1,0 +1,30 @@
+{
+  "parameters": {
+    "seeds": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "exploration_steps": 200,
+    "sgd_epochs": 2000,
+    "sgd_lr": 0.005,
+    "probabilistic_layer_names": [
+      "Dense0",
+      "Dense4"
+    ],
+    "output_dir": "results/pbnn8888",
+    "input_file": "fatigue.npz",
+    "hidden_dims": [
+      8,
+      8,
+      8,
+      8
+    ],
+    "activation": "silu",
+    "experiment_name": "fatigue"
+  },
+  "timestamp": "2024-12-09T22:05:15.430460",
+  "results_file": "fatigue_probdense0-dense4_steps200_epochs2000_lr0.005_20241209_220515.pkl"
+}

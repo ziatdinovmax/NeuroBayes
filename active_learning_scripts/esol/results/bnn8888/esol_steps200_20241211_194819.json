@@ -1,0 +1,24 @@
+{
+  "parameters": {
+    "seeds": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "exploration_steps": 200,
+    "output_dir": "results/bnn8888",
+    "input_file": "esol.npz",
+    "hidden_dims": [
+      8,
+      8,
+      8,
+      8
+    ],
+    "activation": "silu",
+    "experiment_name": "esol"
+  },
+  "timestamp": "2024-12-11T19:48:19.719532",
+  "results_file": "esol_steps200_20241211_194819.pkl"
+}

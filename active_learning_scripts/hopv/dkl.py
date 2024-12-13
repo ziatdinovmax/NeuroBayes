@@ -12,6 +12,7 @@ from dataclasses import dataclass, asdict
 from typing import List, Dict, Tuple
 import json
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 import pickle
 
 # Configure logging
@@ -346,6 +347,9 @@ def main():
         # Load data
         data = np.load(config.input_file)
         X, y = data["features"], data["targets"]
+
+        x_scaler = StandardScaler()
+        X = x_scaler.fit_transform(X)
         
         explorer = DKLExplorer(config)
         
