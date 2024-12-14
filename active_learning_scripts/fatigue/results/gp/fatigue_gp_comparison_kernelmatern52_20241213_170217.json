@@ -14,10 +14,10 @@
     "num_epochs": 1000,
     "learning_rate": 0.01,
     "output_dir": "results/gp",
-    "input_file": "htem.npz",
-    "experiment_name": "gp_comparison",
+    "input_file": "fatigue.npz",
+    "experiment_name": "fatigue_gp_comparison",
     "kernel": "matern52"
   },
-  "timestamp": "2024-12-05T09:28:11.643591",
-  "results_file": "gp_comparison_kernelmatern52_20241205_092811.pkl"
+  "timestamp": "2024-12-13T17:02:17.093397",
+  "results_file": "fatigue_gp_comparison_kernelmatern52_20241213_170217.pkl"
 }

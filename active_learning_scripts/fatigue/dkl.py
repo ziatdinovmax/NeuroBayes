@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import datetime
-
 import logging
 import argparse
 from pathlib import Path
@@ -173,23 +172,37 @@ class DKLExplorer:
         self,
         y_true: torch.Tensor,
         y_pred: torch.Tensor,
-        variance: torch.Tensor
+        variance: torch.Tensor,
+        y_scaler: StandardScaler
     ) -> Dict[str, float]:
-        """Calculate performance metrics."""
-        mse = torch.mean((y_true - y_pred) ** 2).item()
-        mae = torch.mean(torch.abs(y_true - y_pred)).item()
+        """Calculate performance metrics with rescaled values."""
+        # Rescale predictions and true values back to original scale
+        y_true_orig = torch.FloatTensor(y_scaler.inverse_transform(
+            y_true.cpu().numpy().reshape(-1, 1)
+        )).to(self.device)
+        y_pred_orig = torch.FloatTensor(y_scaler.inverse_transform(
+            y_pred.cpu().numpy().reshape(-1, 1)
+        )).to(self.device)
         
-        # Calculate NLPD
-        const = -0.5 * torch.log(2 * np.pi * variance)
-        prob_density = -0.5 * (y_true - y_pred) ** 2 / variance
-        nlpd = -torch.mean(const + prob_density).item()
+        # Scale variance back to original scale
+        variance_orig = variance * (y_scaler.scale_[0] ** 2)
         
-        # Calculate 95% coverage
+        # Calculate metrics in original scale
+        mse = torch.mean((y_true_orig - y_pred_orig) ** 2).item()
+        mae = torch.mean(torch.abs(y_true_orig - y_pred_orig)).item()
+        
+        # Calculate NLPD in original scale
+        nlpd = 0.5 * torch.mean(
+            torch.log(2 * np.pi * variance_orig) + 
+            (y_true_orig - y_pred_orig) ** 2 / variance_orig
+        ).item()
+        
+        # Calculate 95% coverage in original scale
         z_score = 1.96
-        lower = y_pred - z_score * torch.sqrt(variance)
-        upper = y_pred + z_score * torch.sqrt(variance)
+        lower = y_pred_orig - z_score * torch.sqrt(variance_orig)
+        upper = y_pred_orig + z_score * torch.sqrt(variance_orig)
         coverage = torch.mean(
-            ((y_true >= lower) & (y_true <= upper)).float()
+            ((y_true_orig >= lower) & (y_true_orig <= upper)).float()
         ).item()
         
         return {
@@ -204,7 +217,8 @@ class DKLExplorer:
         X: np.ndarray,
         y: np.ndarray,
         latent_dim: int,
-        seed: int
+        seed: int,
+        y_scaler: StandardScaler
     ) -> Dict[str, List[float]]:
         """Run active learning exploration process."""
         torch.manual_seed(seed)
@@ -232,9 +246,9 @@ class DKLExplorer:
                 # Make predictions
                 pred_mean, pred_var = self.predict(model, likelihood, X_unmeasured)
                 
-                # Calculate metrics
+                # Calculate metrics with rescaling
                 step_metrics = self.calculate_metrics(
-                    y_unmeasured, pred_mean, pred_var
+                    y_unmeasured, pred_mean, pred_var, y_scaler
                 )
                 
                 for metric, value in step_metrics.items():
@@ -327,13 +341,13 @@ def main():
     parser.add_argument(
         "--input-file",
         type=Path,
-        default=Path("freesolv.npz"),
+        default=Path("fatigue.npz"),
         help="Input data file path"
     )
     parser.add_argument(
         "--experiment-name",
         type=str,
-        default="freesolv_dkl",
+        default="fatigue_dkl",
         help="Name for this experiment"
     )
     
@@ -347,8 +361,12 @@ def main():
         data = np.load(config.input_file)
         X, y = data["features"], data["targets"]
 
+        # Scale both X and y
         x_scaler = StandardScaler()
+        y_scaler = StandardScaler()
+        
         X = x_scaler.fit_transform(X)
+        y = y_scaler.fit_transform(y.reshape(-1, 1)).ravel()
         
         explorer = DKLExplorer(config)
         
@@ -362,7 +380,7 @@ def main():
             
             for seed in config.seeds:
                 results['runs'][seed] = explorer.run_exploration(
-                    X, y, latent_dim, seed
+                    X, y, latent_dim, seed, y_scaler
                 )
             
             # Save results and metadata

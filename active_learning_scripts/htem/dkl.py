@@ -71,11 +71,11 @@ class DKLFeatureExtractor(torch.nn.Sequential):
         act_fn = activation_map[activation.lower()]
         
         # Build network with specified activation function
-        self.add_module('linear1', torch.nn.Linear(input_dim, 32))
+        self.add_module('linear1', torch.nn.Linear(input_dim, 8))
         self.add_module('act1', act_fn())
-        self.add_module('linear2', torch.nn.Linear(32, 16))
+        self.add_module('linear2', torch.nn.Linear(8, 8))
         self.add_module('act2', act_fn())
-        self.add_module('linear3', torch.nn.Linear(16, 8))
+        self.add_module('linear3', torch.nn.Linear(8, 8))
         self.add_module('act3', act_fn())
         self.add_module('linear4', torch.nn.Linear(8, 8))
         self.add_module('act4', act_fn())
@@ -303,7 +303,7 @@ def main():
     parser.add_argument(
         "--num-epochs",
         type=int,
-        default=1000,
+        default=100,
         help="Number of training epochs per step"
     )
     parser.add_argument(
@@ -316,13 +316,13 @@ def main():
         "--activation",
         type=str,
         choices=["tanh", "relu", "silu"],
-        default="tanh",
+        default="silu",
         help="Activation function to use"
     )
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("results/dkl"),
+        default=Path("results/dkl8888"),
         help="Directory to save results"
     )
     parser.add_argument(

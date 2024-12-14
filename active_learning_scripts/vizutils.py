@@ -121,12 +121,12 @@ def plot_comparison(pbnn_files, bnn_file=None, dkl_files=None, gp_files=None, de
     if dkl_files:
         dkl_colors = plt.cm.Blues(np.linspace(0.6, 0.9, len(dkl_files)))
     if gp_files:
-        gp_colors = plt.cm.Greys(np.linspace(0.6, 0.9, len(gp_files)))
+        gp_colors = plt.cm.Greens(np.linspace(0.6, 0.9, len(gp_files)))
     
     
     titles = {
         'mse': 'RMSE over Time',
-        'nlpd': 'NLPD over Time (log scale)',
+        'nlpd': 'NLPD over Time',
         'coverage': 'Coverage over Time'
     }
     
@@ -257,7 +257,7 @@ def plot_comparison(pbnn_files, bnn_file=None, dkl_files=None, gp_files=None, de
         ax.tick_params(axis='both', which='major', labelsize=11)
         
         # if metric == 'coverage':
-        #     ax.set_ylim(0, 1)
+        #     ax.set_ylim(0.7, 1.1)
         #     ax.set_yticks(np.arange(0, 1.1, 0.2))
         
         if metric == 'nlpd':

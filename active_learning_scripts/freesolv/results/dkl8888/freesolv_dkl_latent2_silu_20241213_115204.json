@@ -1,8 +1,7 @@
 {
   "parameters": {
     "latent_dims": [
-      2,
-      4
+      2
     ],
     "seeds": [
       1,
@@ -12,14 +11,14 @@
       5
     ],
     "exploration_steps": 200,
-    "num_epochs": 1000,
+    "num_epochs": 100,
     "learning_rate": 0.01,
-    "output_dir": "results/dkl",
+    "output_dir": "results/dkl8888",
     "input_file": "freesolv.npz",
     "activation": "silu",
-    "experiment_name": "freesolv_dkl_comparison",
+    "experiment_name": "freesolv_dkl",
     "latent_dim": 2
   },
-  "timestamp": "2024-12-05T15:51:14.662277",
-  "results_file": "freesolv_dkl_comparison_latent2_silu_20241205_155114.pkl"
+  "timestamp": "2024-12-13T11:52:04.848345",
+  "results_file": "freesolv_dkl_latent2_silu_20241213_115204.pkl"
 }

@@ -1,0 +1,23 @@
+{
+  "parameters": {
+    "kernels": [
+      "matern52"
+    ],
+    "seeds": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "exploration_steps": 200,
+    "num_epochs": 1000,
+    "learning_rate": 0.01,
+    "output_dir": "results/gp",
+    "input_file": "freesolv.npz",
+    "experiment_name": "freesolv_gp_comparison",
+    "kernel": "matern52"
+  },
+  "timestamp": "2024-12-13T13:53:41.410073",
+  "results_file": "freesolv_gp_comparison_kernelmatern52_20241213_135341.pkl"
+}

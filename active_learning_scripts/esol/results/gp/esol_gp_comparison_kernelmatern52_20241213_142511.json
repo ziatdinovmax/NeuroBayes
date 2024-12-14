@@ -14,10 +14,10 @@
     "num_epochs": 1000,
     "learning_rate": 0.01,
     "output_dir": "results/gp",
-    "input_file": "htem.npz",
-    "experiment_name": "gp_comparison",
+    "input_file": "esol.npz",
+    "experiment_name": "esol_gp_comparison",
     "kernel": "matern52"
   },
-  "timestamp": "2024-12-05T11:47:31.987358",
-  "results_file": "gp_comparison_kernelmatern52_20241205_114731.pkl"
+  "timestamp": "2024-12-13T14:25:11.392990",
+  "results_file": "esol_gp_comparison_kernelmatern52_20241213_142511.pkl"
 }

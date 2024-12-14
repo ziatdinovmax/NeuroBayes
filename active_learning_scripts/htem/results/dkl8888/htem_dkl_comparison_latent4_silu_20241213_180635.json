@@ -1,0 +1,25 @@
+{
+  "parameters": {
+    "latent_dims": [
+      2,
+      4
+    ],
+    "seeds": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "exploration_steps": 200,
+    "num_epochs": 100,
+    "learning_rate": 0.01,
+    "output_dir": "results/dkl8888",
+    "input_file": "htem.npz",
+    "activation": "silu",
+    "experiment_name": "htem_dkl_comparison",
+    "latent_dim": 4
+  },
+  "timestamp": "2024-12-13T18:06:35.883218",
+  "results_file": "htem_dkl_comparison_latent4_silu_20241213_180635.pkl"
+}
