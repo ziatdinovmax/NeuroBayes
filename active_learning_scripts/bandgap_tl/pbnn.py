@@ -8,7 +8,7 @@ import logging
 import datetime
 import json
 from dataclasses import dataclass, asdict
-from typing import List, Tuple, Dict, Any, NamedTuple
+from typing import List, Tuple, Dict, Any
 import numpy as np
 import jax.numpy as jnp
 from jax.random import PRNGKey
@@ -29,14 +29,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-class ScaledData(NamedTuple):
-    """Container for scaled data and corresponding scalers."""
-    X_scaled: np.ndarray
-    y_theory_scaled: np.ndarray
-    y_exp_scaled: np.ndarray
-    X_scaler: StandardScaler
-    y_scaler: StandardScaler
-
 @dataclass
 class ExplorationConfig:
     """Configuration parameters for the exploration process."""
@@ -50,7 +42,7 @@ class ExplorationConfig:
     file: Path
     hidden_dims: List[int]
     activation: str
-    priors_sigma: float
+    priors_sigma: float  # New: sigma for priors
     experiment_name: str = "bandgaps"
     
     def get_output_filename(self) -> Path:
@@ -63,11 +55,10 @@ class ExplorationConfig:
 class DataProcessor:
     """Handles data loading and preprocessing."""
     
-    def __init__(self):
-        self.X_scaler = StandardScaler()
-        self.y_scaler = StandardScaler()
+    def __init__(self, scaler=None):
+        self.scaler = scaler or StandardScaler()
         
-    def load_and_preprocess(self, file: str) -> ScaledData:
+    def load_and_preprocess(self, file: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Load and preprocess both theoretical and experimental data."""
         try:
             # Load theoretical and experimental data
@@ -77,30 +68,9 @@ class DataProcessor:
             y_theory = data['targets_theory']
             
             self._validate_input_data(X, y_theory, y_experimental)
+            X_scaled = self.scaler.fit_transform(X)
             
-            # Scale features
-            X_scaled = self.X_scaler.fit_transform(X)
-            
-            # Reshape y data for scaling
-            y_theory = y_theory.reshape(-1, 1)
-            y_experimental = y_experimental.reshape(-1, 1)
-            
-            # Fit scaler on theoretical data (which typically has more samples)
-            y_theory_scaled = self.y_scaler.fit_transform(y_theory)
-            # Transform experimental data using the same scaler
-            y_exp_scaled = self.y_scaler.transform(y_experimental)
-            
-            # Convert back to 1D arrays
-            y_theory_scaled = y_theory_scaled.ravel()
-            y_exp_scaled = y_exp_scaled.ravel()
-            
-            return ScaledData(
-                X_scaled=X_scaled,
-                y_theory_scaled=y_theory_scaled,
-                y_exp_scaled=y_exp_scaled,
-                X_scaler=self.X_scaler,
-                y_scaler=self.y_scaler
-            )
+            return X_scaled, y_theory, y_experimental
         except Exception as e:
             logger.error(f"Error loading data: {str(e)}")
             raise
@@ -120,21 +90,14 @@ class ActiveLearner:
         self.config = config
         self.pretrained_net = None
         self.pretrained_params = None
-        self.y_scaler = None
         
-    def pretrain(self, scaled_data: ScaledData) -> None:
+    def pretrain(self, X: np.ndarray, y_theory: np.ndarray) -> None:
         """Pre-train the deterministic model on theoretical data."""
         logger.info("Starting pre-training phase...")
         
-        # Store y_scaler for later use
-        self.y_scaler = scaled_data.y_scaler
-        
         # Split data for training and testing
         X_train, X_test, y_train, y_test = train_test_split(
-            scaled_data.X_scaled, 
-            scaled_data.y_theory_scaled,
-            test_size=0.1, 
-            random_state=self.config.seeds[0]
+            X, y_theory, test_size=0.1, random_state=self.config.seeds[0]
         )
         
         # Initialize the network
@@ -147,7 +110,7 @@ class ActiveLearner:
         # Create deterministic model and train
         det_model = DeterministicNN(
             net, 
-            scaled_data.X_scaled.shape[-1], 
+            X.shape[-1], 
             learning_rate=self.config.pretrain_lr,
             map=False
         )
@@ -160,12 +123,9 @@ class ActiveLearner:
         )
         
         # Evaluate deterministic model on test data
-        y_pred_scaled = det_model.predict(X_test).squeeze()
-        # Inverse transform predictions and true values for interpretable metrics
-        y_pred = self.y_scaler.inverse_transform(y_pred_scaled.reshape(-1, 1)).ravel()
-        y_test_unscaled = self.y_scaler.inverse_transform(y_test.reshape(-1, 1)).ravel()
-        det_mae = utils.mae(y_pred, y_test_unscaled)
-        logger.info(f"Deterministic model MAE on test data (unscaled): {det_mae:.4f}")
+        y_pred = det_model.predict(X_test).squeeze()
+        det_rmse = np.sqrt(utils.mse(y_pred, y_test))
+        logger.info(f"Deterministic model RMSE on test data: {det_rmse:.4f}")
         
         # Store pre-trained model and parameters
         self.pretrained_net = det_model.model
@@ -174,17 +134,15 @@ class ActiveLearner:
 
     def run_exploration(
         self, 
-        scaled_data: ScaledData,
+        X: np.ndarray, 
+        y_exp: np.ndarray, 
         seed: int
     ) -> Dict[str, List[float]]:
         """Run the active learning exploration process."""
         np.random.seed(seed)
         
         X_measured, X_unmeasured, y_measured, y_unmeasured = train_test_split(
-            scaled_data.X_scaled, 
-            scaled_data.y_exp_scaled,
-            test_size=0.95, 
-            random_state=seed
+            X, y_exp, test_size=0.95, random_state=seed
         )
         
         metrics = {metric: [] for metric in ['mse', 'mae', 'nlpd', 'coverage']}
@@ -203,7 +161,6 @@ class ActiveLearner:
                 for metric, value in results['metrics'].items():
                     metrics[metric].append(value)
                     
-                # Log metrics (already in unscaled space)
                 logger.info(
                     f"RMSE: {np.sqrt(results['metrics']['mse']):.4f}, "
                     f"MAE: {results['metrics']['mae']:.4f}, "
@@ -249,30 +206,9 @@ class ActiveLearner:
                 break
 
         posterior_mean, posterior_var = model.predict(X_unmeasured)
+
         posterior_mean, posterior_var = posterior_mean.squeeze(), posterior_var.squeeze()
         
-        # Convert predictions and variances to unscaled space
-        posterior_mean_unscaled = self.y_scaler.inverse_transform(
-            posterior_mean.reshape(-1, 1)
-        ).ravel()
-        
-        # Transform variance to unscaled space
-        posterior_var_unscaled = posterior_var * (self.y_scaler.scale_[0] ** 2)
-        
-        # Convert true values to unscaled space
-        y_unmeasured_unscaled = self.y_scaler.inverse_transform(
-            y_unmeasured.reshape(-1, 1)
-        ).ravel()
-        
-        # Calculate metrics in unscaled space
-        metrics = {
-            'mse': utils.mse(posterior_mean_unscaled, y_unmeasured_unscaled),
-            'mae': utils.mae(posterior_mean_unscaled, y_unmeasured_unscaled),
-            'nlpd': utils.nlpd(y_unmeasured_unscaled, posterior_mean_unscaled, posterior_var_unscaled),
-            'coverage': utils.coverage(y_unmeasured_unscaled, posterior_mean_unscaled, posterior_var_unscaled)
-        }
-        
-        # Selection of next point still based on scaled variance
         next_point_idx = posterior_var.argmax()
         
         # Update measured data
@@ -289,6 +225,14 @@ class ActiveLearner:
         # Update unmeasured data
         new_X_unmeasured = np.delete(X_unmeasured, next_point_idx, axis=0)
         new_y_unmeasured = np.delete(y_unmeasured, next_point_idx)
+        
+        # Calculate metrics
+        metrics = {
+            'mse': utils.mse(posterior_mean, y_unmeasured),
+            'mae': utils.mae(posterior_mean, y_unmeasured),
+            'nlpd': utils.nlpd(y_unmeasured, posterior_mean, posterior_var),
+            'coverage': utils.coverage(y_unmeasured, posterior_mean, posterior_var)
+        }
         
         return {
             'new_measured': (new_X_measured, new_y_measured),
@@ -360,7 +304,7 @@ def parse_arguments() -> ExplorationConfig:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("results/pbnn321688yscaled"),
+        default=Path("results/pbnn321688"),
         help="Directory to save results"
     )
     parser.add_argument(
@@ -387,20 +331,22 @@ def main():
     active_learner = ActiveLearner(config)
     
     try:
-        # Load and preprocess data
-        scaled_data = data_processor.load_and_preprocess(config.file)
+        # Load both theoretical and experimental data
+        X, y_theory, y_exp = data_processor.load_and_preprocess(
+            config.file,
+        )
         
         # Pre-train on theoretical data (only once)
-        active_learner.pretrain(scaled_data)
+        active_learner.pretrain(X, y_theory)
         
         results = {
             'config': asdict(config),
-            'runs': {},
+            'runs': {}
         }
         
         # Run active learning with multiple seeds
         for seed in config.seeds:
-            results['runs'][seed] = active_learner.run_exploration(scaled_data, seed)
+            results['runs'][seed] = active_learner.run_exploration(X, y_exp, seed)
             
         # Save results
         output_file = config.get_output_filename()
@@ -410,14 +356,13 @@ def main():
         
         # Save metadata
         metadata_file = output_file.with_suffix('.json')
-        metadata = {
-            'parameters': {k: str(v) if isinstance(v, Path) else v 
-                         for k, v in asdict(config).items()},
-            'timestamp': datetime.datetime.now().isoformat(),
-            'results_file': output_file.name
-        }
         with open(metadata_file, 'w') as f:
-            json.dump(metadata, f, indent=2)
+            json.dump({
+                'parameters': {k: str(v) if isinstance(v, Path) else v 
+                             for k, v in asdict(config).items()},
+                'timestamp': datetime.datetime.now().isoformat(),
+                'results_file': output_file.name
+            }, f, indent=2)
         logger.info(f"Metadata saved to {metadata_file}")
             
     except Exception as e:
