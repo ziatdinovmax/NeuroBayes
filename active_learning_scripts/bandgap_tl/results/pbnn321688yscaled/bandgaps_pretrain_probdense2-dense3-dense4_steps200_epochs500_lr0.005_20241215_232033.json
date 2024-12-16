@@ -1,0 +1,33 @@
+{
+  "parameters": {
+    "seeds": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "exploration_steps": 200,
+    "pretrain_epochs": 500,
+    "pretrain_lr": 0.005,
+    "pretrain_batch_size": 32,
+    "probabilistic_layer_names": [
+      "Dense2",
+      "Dense3",
+      "Dense4"
+    ],
+    "output_dir": "results/pbnn321688yscaled",
+    "file": "bandgaps_non_metals_transfer_learning.npz",
+    "hidden_dims": [
+      32,
+      16,
+      8,
+      8
+    ],
+    "activation": "silu",
+    "priors_sigma": 1.0,
+    "experiment_name": "bandgaps"
+  },
+  "timestamp": "2024-12-15T23:20:33.769385",
+  "results_file": "bandgaps_pretrain_probdense2-dense3-dense4_steps200_epochs500_lr0.005_20241215_232033.pkl"
+}
