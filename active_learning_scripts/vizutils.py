@@ -262,7 +262,7 @@ def plot_comparison(pbnn_files, bnn_file=None, dkl_files=None, gp_files=None, de
         
         if metric == 'nlpd':
             ax.set_yscale('symlog')
-        
+                    
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
         
