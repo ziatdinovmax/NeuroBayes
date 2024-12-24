@@ -16,8 +16,8 @@
       "Dense3",
       "Dense4"
     ],
-    "output_dir": "results/pbnn321688",
-    "file": "bandgaps_non_metals_transfer_learning.npz",
+    "output_dir": "results/ptpbnn321688",
+    "file": "freesolv_transfer_learning.npz",
     "hidden_dims": [
       32,
       16,
@@ -26,8 +26,8 @@
     ],
     "activation": "silu",
     "priors_sigma": 0.5,
-    "experiment_name": "bandgaps"
+    "experiment_name": "noisy_freesolv"
   },
-  "timestamp": "2024-12-14T06:17:40.795628",
-  "results_file": "bandgaps_pretrain_probdense2-dense3-dense4_steps200_epochs500_lr0.005_20241214_061740.pkl"
+  "timestamp": "2024-12-23T20:56:51.887382",
+  "results_file": "noisy_freesolv_pretrain_probdense2-dense3-dense4_steps200_epochs500_lr0.005_20241223_205651.pkl"
 }

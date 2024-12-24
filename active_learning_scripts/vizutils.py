@@ -106,23 +106,53 @@ def add_detnn_to_plot(detnn_file: str, axes, metric_indices = {'mse': 0, 'nlpd':
 
 
 
-def plot_comparison(pbnn_files, bnn_file=None, dkl_files=None, gp_files=None, detnn_file=None, save_path=None):
-    """Plots metrics comparing PBNN, DKL, and GP results."""
+def plot_comparison(pbnn_files, bnn_file=None, dkl_files=None, gp_files=None, detnn_file=None, save_path=None,
+                 mse_symlog=False, nlpd_symlog=True, coverage_symlog=False,
+                 mse_ylim=None, nlpd_ylim=None, coverage_ylim=None):
+    """
+    Plots metrics comparing PBNN, DKL, and GP results.
+    
+    Parameters:
+    -----------
+    pbnn_files : list
+        List of file paths for PBNN results
+    bnn_file : str, optional
+        File path for BNN results
+    dkl_files : list, optional
+        List of file paths for DKL results
+    gp_files : list, optional
+        List of file paths for GP results
+    detnn_file : str, optional
+        File path for deterministic neural network results
+    save_path : str, optional
+        Path to save the figure
+    mse_symlog : bool, optional (default=False)
+        Whether to use symlog scale for MSE plot
+    nlpd_symlog : bool, optional (default=True)
+        Whether to use symlog scale for NLPD plot
+    coverage_symlog : bool, optional (default=False)
+        Whether to use symlog scale for coverage plot
+    mse_ylim : tuple, optional
+        Y-axis limits for MSE plot (min, max)
+    nlpd_ylim : tuple, optional
+        Y-axis limits for NLPD plot (min, max)
+    coverage_ylim : tuple, optional
+        Y-axis limits for coverage plot (min, max)
+    """
     plt.style.use('seaborn-v0_8-paper')
     
     pbnn_base_colors = [
-        '#e31a1c',  # red
-        '#6a3d9a',  # purple
-        '#ff7f00',  # orange
-        '#fb9a99'   # pink
+        '#E31A1C',  # red
+        '#9370DB',  # purple
+        '#FF8C00',  # orange
+        '#228B22'   # green
     ]
 
-    pbnn_colors = pbnn_base_colors #plt.cm.Reds(np.linspace(0.6, 0.9, len(pbnn_files)))
+    pbnn_colors = pbnn_base_colors
     if dkl_files:
         dkl_colors = plt.cm.Blues(np.linspace(0.6, 0.9, len(dkl_files)))
     if gp_files:
         gp_colors = plt.cm.Greens(np.linspace(0.6, 0.9, len(gp_files)))
-    
     
     titles = {
         'mse': 'RMSE over Time',
@@ -166,7 +196,7 @@ def plot_comparison(pbnn_files, bnn_file=None, dkl_files=None, gp_files=None, de
             
             final_values[model_name][metric] = (plot_mean[-1], plot_std[-1])
     
-    if dkl_files: # Plot DKL results
+    if dkl_files:
         for file_path, color in zip(dkl_files, dkl_colors):
             results = load_results(file_path)
             metrics = compute_statistics(results)
@@ -192,7 +222,7 @@ def plot_comparison(pbnn_files, bnn_file=None, dkl_files=None, gp_files=None, de
                 
                 final_values[model_name][metric] = (plot_mean[-1], plot_std[-1])
     
-    if gp_files: # Plot GP results
+    if gp_files:
         for file_path, color in zip(gp_files, gp_colors):
             results = load_results(file_path)
             metrics = compute_statistics(results)
@@ -217,8 +247,7 @@ def plot_comparison(pbnn_files, bnn_file=None, dkl_files=None, gp_files=None, de
                             color=line.get_color(), alpha=0.3)
                 
                 final_values[model_name][metric] = (plot_mean[-1], plot_std[-1])
-        
-
+    
     if detnn_file:
         add_detnn_to_plot(detnn_file, axes)
 
@@ -247,8 +276,12 @@ def plot_comparison(pbnn_files, bnn_file=None, dkl_files=None, gp_files=None, de
             
             final_values[model_name][metric] = (plot_mean[-1], plot_std[-1])
 
-        
-    for metric, ax in zip(titles.keys(), axes):
+    # Set scales and limits for each subplot
+    metrics_list = ['mse', 'nlpd', 'coverage']
+    symlog_settings = [mse_symlog, nlpd_symlog, coverage_symlog]
+    ylimits = [mse_ylim, nlpd_ylim, coverage_ylim]
+    
+    for metric, ax, use_symlog, ylim in zip(metrics_list, axes, symlog_settings, ylimits):
         ax.set_title(titles[metric], fontsize=16, pad=10)
         ax.set_xlabel('Active Learning Steps', fontsize=16)
         ax.set_ylabel(ylabels[metric], fontsize=16)
@@ -256,24 +289,23 @@ def plot_comparison(pbnn_files, bnn_file=None, dkl_files=None, gp_files=None, de
         ax.grid(True, alpha=0.3, linestyle='--')
         ax.tick_params(axis='both', which='major', labelsize=11)
         
-        # if metric == 'coverage':
-        #     ax.set_ylim(0.7, 1.1)
-        #     ax.set_yticks(np.arange(0, 1.1, 0.2))
-        
-        if metric == 'nlpd':
+        # Apply symlog scale if specified
+        if use_symlog:
             ax.set_yscale('symlog')
+        
+        # Apply y-axis limits if specified
+        if ylim is not None:
+            ax.set_ylim(ylim)
                     
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
         
         legend = ax.legend(loc='best', frameon=True, framealpha=0.9, 
-                         fontsize=12, title='Models')
+                         fontsize=14, title='Models')
         legend.get_title().set_fontsize(14)
         legend.get_frame().set_facecolor('white')
         legend.get_frame().set_edgecolor('none')
     
-    
-
     plt.tight_layout()
     
     if save_path:
@@ -283,12 +315,14 @@ def plot_comparison(pbnn_files, bnn_file=None, dkl_files=None, gp_files=None, de
     print("\nFinal values (mean ± std):")
     for model_name in final_values:
         print(f"\n{model_name}:")
-        for metric in ['mse', 'nlpd', 'coverage']:
+        for metric in metrics_list:
             mean, std = final_values[model_name][metric]
             if metric == 'mse':
                 print(f"  RMSE: {mean:.4f} ± {std:.4f}") 
             else:
                 print(f"  {metric.upper()}: {mean:.4f} ± {std:.4f}")
+                
+    return fig, axes
 
 
 def plot_final_results(pbnn_files, dkl_files, gp_files, save_path=None):

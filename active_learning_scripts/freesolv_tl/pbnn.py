@@ -39,7 +39,7 @@ class ExplorationConfig:
     file: Path
     hidden_dims: List[int]
     activation: str
-    experiment_name: str = "bandgaps"
+    experiment_name: str = "noisy_freesolv"
     
     def get_output_filename(self) -> Path:
         """Generate a descriptive output filename based on parameters."""
@@ -59,12 +59,16 @@ class DataProcessor:
         try:
             data = np.load(file)
             X = data['features']
-            y_experimental = data['targets_exp']
+            y_exp = data['targets_exp']
+
+            noise_level = 1.0
+            np.random.seed(0)
+            y_exp += noise_level * np.random.normal(size=len(y_exp))
             
-            self._validate_input_data(X, y_experimental)
+            self._validate_input_data(X, y_exp)
             X_scaled = self.scaler.fit_transform(X)
             
-            return X_scaled, y_experimental
+            return X_scaled, y_exp
         except Exception as e:
             logger.error(f"Error loading data: {str(e)}")
             raise
@@ -263,13 +267,13 @@ def parse_arguments() -> ExplorationConfig:
     parser.add_argument(
         "--file",
         type=Path,
-        default=Path("bandgaps_non_metals_transfer_learning.npz"),
+        default=Path("freesolv_transfer_learning.npz"),
         help="Input file with experimental data"
     )
     parser.add_argument(
         "--experiment-name",
         type=str,
-        default="bandgaps",
+        default="noisy_freesolv",
         help="Name of the experiment"
     )
     

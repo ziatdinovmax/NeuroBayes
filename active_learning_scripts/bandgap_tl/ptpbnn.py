@@ -10,6 +10,8 @@ import json
 from dataclasses import dataclass, asdict
 from typing import List, Tuple, Dict, Any
 import numpy as np
+import jax.numpy as jnp
+from jax.random import PRNGKey
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 import argparse
@@ -17,7 +19,7 @@ import pickle
 
 # Local imports
 from neurobayes.flax_nets.mlp import FlaxMLP
-from neurobayes import PartialBNN
+from neurobayes import PartialBNN, DeterministicNN
 from neurobayes.utils import utils
 
 # Configure logging
@@ -32,20 +34,22 @@ class ExplorationConfig:
     """Configuration parameters for the exploration process."""
     seeds: List[int]
     exploration_steps: int
-    sgd_epochs: int
-    sgd_lr: float
+    pretrain_epochs: int
+    pretrain_lr: float
+    pretrain_batch_size: int
     probabilistic_layer_names: List[str]
     output_dir: Path
     file: Path
     hidden_dims: List[int]
     activation: str
+    priors_sigma: float  # New: sigma for priors
     experiment_name: str = "bandgaps"
     
     def get_output_filename(self) -> Path:
         """Generate a descriptive output filename based on parameters."""
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         layer_str = "-".join(l.lower() for l in self.probabilistic_layer_names)
-        params = f"prob{layer_str}_steps{self.exploration_steps}_epochs{self.sgd_epochs}_lr{self.sgd_lr}"
+        params = f"pretrain_prob{layer_str}_steps{self.exploration_steps}_epochs{self.pretrain_epochs}_lr{self.pretrain_lr}"
         return self.output_dir / f"{self.experiment_name}_{params}_{timestamp}.pkl"
 
 class DataProcessor:
@@ -54,80 +58,91 @@ class DataProcessor:
     def __init__(self, scaler=None):
         self.scaler = scaler or StandardScaler()
         
-    def load_and_preprocess(self, file: str) -> np.ndarray:
-        """Load and preprocess experimental data."""
+    def load_and_preprocess(self, file: str) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Load and preprocess both theoretical and experimental data."""
         try:
+            # Load theoretical and experimental data
             data = np.load(file)
             X = data['features']
             y_experimental = data['targets_exp']
+            y_theory = data['targets_theory']
             
-            self._validate_input_data(X, y_experimental)
+            self._validate_input_data(X, y_theory, y_experimental)
             X_scaled = self.scaler.fit_transform(X)
             
-            return X_scaled, y_experimental
+            return X_scaled, y_theory, y_experimental
         except Exception as e:
             logger.error(f"Error loading data: {str(e)}")
             raise
 
     @staticmethod
-    def _validate_input_data(X: np.ndarray, y: np.ndarray) -> None:
+    def _validate_input_data(X: np.ndarray, y_theory: np.ndarray, y_exp: np.ndarray) -> None:
         """Validate input data types and shapes."""
-        if not isinstance(X, np.ndarray) or not isinstance(y, np.ndarray):
-            raise TypeError("All inputs must be NumPy arrays")
-        if X.shape[0] != y.shape[0]:
-            raise ValueError("X and y must have same number of samples")
+        if not all(isinstance(arr, (np.ndarray, jnp.ndarray)) for arr in [X, y_theory, y_exp]):
+            raise TypeError("All inputs must be NumPy or JAX NumPy arrays")
+        if not (X.shape[0] == y_theory.shape[0] == y_exp.shape[0]):
+            raise ValueError("X, y_theory, and y_exp must have same number of samples")
 
 class ActiveLearner:
-    """Handles the active learning process."""
+    """Handles the active learning process with pre-training."""
     
     def __init__(self, config: ExplorationConfig):
         self.config = config
-        self._init_model()
+        self.pretrained_net = None
+        self.pretrained_params = None
         
-    def _init_model(self) -> None:
-        """Initialize the neural network model."""
+    def pretrain(self, X: np.ndarray, y_theory: np.ndarray) -> None:
+        """Pre-train the deterministic model on theoretical data."""
+        logger.info("Starting pre-training phase...")
+        
+        # Split data for training and testing
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y_theory, test_size=0.1, random_state=self.config.seeds[0]
+        )
+        
+        # Initialize the network
         net = FlaxMLP(
             hidden_dims=self.config.hidden_dims,
             target_dim=1,
             activation=self.config.activation
         )
-        self.model = PartialBNN(
+        
+        # Create deterministic model and train
+        det_model = DeterministicNN(
             net, 
-            probabilistic_layer_names=self.config.probabilistic_layer_names
+            X.shape[-1], 
+            learning_rate=self.config.pretrain_lr,
+            map=False
         )
         
-    def fit_and_predict(
-        self, 
-        X_measured: np.ndarray, 
-        y_measured: np.ndarray, 
-        X_unmeasured: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """Fit the model and make predictions."""
-        self.model.fit(
-            X_measured, 
-            y_measured,
-            sgd_epochs=self.config.sgd_epochs,
-            sgd_lr=self.config.sgd_lr,
-            sgd_batch_size=16,
-            map_sigma=utils.calculate_sigma(X_measured),
-            num_warmup=1000,
-            num_samples=1000,
-            max_num_restarts=2
+        det_model.train(
+            X_train, 
+            y_train,
+            epochs=self.config.pretrain_epochs,
+            batch_size=self.config.pretrain_batch_size
         )
-        posterior_mean, posterior_var = self.model.predict(X_unmeasured)
-        return posterior_mean.squeeze(), posterior_var.squeeze()
+        
+        # Evaluate deterministic model on test data
+        y_pred = det_model.predict(X_test).squeeze()
+        det_rmse = np.sqrt(utils.mse(y_pred, y_test))
+        logger.info(f"Deterministic model RMSE on test data: {det_rmse:.4f}")
+        
+        # Store pre-trained model and parameters
+        self.pretrained_net = det_model.model
+        self.pretrained_params = det_model.state.params
+        logger.info("Pre-training completed")
 
     def run_exploration(
         self, 
         X: np.ndarray, 
-        y: np.ndarray, 
+        y_exp: np.ndarray, 
         seed: int
     ) -> Dict[str, List[float]]:
         """Run the active learning exploration process."""
         np.random.seed(seed)
         
         X_measured, X_unmeasured, y_measured, y_unmeasured = train_test_split(
-            X, y, test_size=0.95, random_state=seed
+            X, y_exp, test_size=0.95, random_state=seed
         )
         
         metrics = {metric: [] for metric in ['mse', 'mae', 'nlpd', 'coverage']}
@@ -164,15 +179,30 @@ class ActiveLearner:
         X_measured: np.ndarray,
         y_measured: np.ndarray,
         X_unmeasured: np.ndarray,
-        y_unmeasured: np.ndarray
+        y_unmeasured: np.ndarray,
     ) -> Dict[str, Any]:
-        """Perform a single exploration step."""
+        """Perform a single exploration step using pre-trained weights"""
         
-        self._init_model()
-        
-        posterior_mean, posterior_var = self.fit_and_predict(
-            X_measured, y_measured, X_unmeasured
+        # Initialize PartialBNN with pre-trained weights
+        model = PartialBNN(
+            self.pretrained_net,
+            self.pretrained_params,
+            probabilistic_layer_names=self.config.probabilistic_layer_names
         )
+        
+        # Fit model using pre-trained weights as initialization
+        model.fit(
+            X_measured,
+            y_measured,
+            priors_sigma=self.config.priors_sigma,
+            num_warmup=1000,
+            num_samples=1000,
+            max_num_restarts=2,
+        )
+        
+        posterior_mean, posterior_var = model.predict(X_unmeasured)
+
+        posterior_mean, posterior_var = posterior_mean.squeeze(), posterior_var.squeeze()
         
         next_point_idx = posterior_var.argmax()
         
@@ -207,7 +237,7 @@ class ActiveLearner:
 
 def parse_arguments() -> ExplorationConfig:
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description="PartialBNN Active Learning Script")
+    parser = argparse.ArgumentParser(description="Pre-trained PartialBNN Active Learning Script")
     parser.add_argument(
         "--seeds", 
         nargs="+", 
@@ -222,16 +252,28 @@ def parse_arguments() -> ExplorationConfig:
         help="Number of exploration steps"
     )
     parser.add_argument(
-        "--sgd-epochs",
+        "--pretrain-epochs",
         type=int,
-        default=2000,
-        help="Number of SGD epochs"
+        default=500,
+        help="Number of pre-training epochs"
     )
     parser.add_argument(
-        "--sgd-lr",
+        "--pretrain-lr",
         type=float,
         default=5e-3,
-        help="SGD learning rate"
+        help="Pre-training learning rate"
+    )
+    parser.add_argument(
+        "--pretrain-batch-size",
+        type=int,
+        default=32,
+        help="Pre-training batch size"
+    )
+    parser.add_argument(
+        "--priors-sigma",
+        type=float,
+        default=0.5,
+        help="Sigma for priors in PartialBNN"
     )
     parser.add_argument(
         "--probabilistic-layer-names",
@@ -257,14 +299,14 @@ def parse_arguments() -> ExplorationConfig:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("results/pbnn321688"),
+        default=Path("results/ptpbnn321688"),
         help="Directory to save results"
     )
     parser.add_argument(
         "--file",
         type=Path,
         default=Path("bandgaps_non_metals_transfer_learning.npz"),
-        help="Input file with experimental data"
+        help="Input file with theoretical and experimental data"
     )
     parser.add_argument(
         "--experiment-name",
@@ -284,8 +326,13 @@ def main():
     active_learner = ActiveLearner(config)
     
     try:
-        # Load experimental data only
-        X, y_exp = data_processor.load_and_preprocess(config.file)
+        # Load both theoretical and experimental data
+        X, y_theory, y_exp = data_processor.load_and_preprocess(
+            config.file,
+        )
+        
+        # Pre-train on theoretical data (only once)
+        active_learner.pretrain(X, y_theory)
         
         results = {
             'config': asdict(config),

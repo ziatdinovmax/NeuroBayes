@@ -16,7 +16,7 @@
       "Dense3",
       "Dense4"
     ],
-    "output_dir": "results/pbnn321688",
+    "output_dir": "results/ptpbnn321688",
     "file": "bandgaps_non_metals_transfer_learning.npz",
     "hidden_dims": [
       32,
@@ -25,9 +25,9 @@
       8
     ],
     "activation": "silu",
-    "priors_sigma": 0.001,
+    "priors_sigma": 0.1,
     "experiment_name": "bandgaps"
   },
-  "timestamp": "2024-12-14T02:32:49.080130",
-  "results_file": "bandgaps_pretrain_probdense2-dense3-dense4_steps200_epochs500_lr0.005_20241214_023248.pkl"
+  "timestamp": "2024-12-22T21:31:37.598606",
+  "results_file": "bandgaps_pretrain_probdense2-dense3-dense4_steps200_epochs500_lr0.005_20241222_213137.pkl"
 }
