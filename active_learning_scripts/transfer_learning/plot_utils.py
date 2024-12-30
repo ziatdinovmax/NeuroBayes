@@ -88,7 +88,7 @@ def plot_sigma_comparison(
         for result in metric_results:
             color = sigma_colors.get(result['sigma'], '#17becf')
             axes[idx].plot(result['steps'], result['mean'], 
-                         label=f'σ={result["sigma"]:.1f}',
+                         label=f'τ={result["sigma"]:.1f}',
                          color=color)
             axes[idx].fill_between(result['steps'],
                                  result['mean'] - result['std'],
@@ -180,7 +180,7 @@ def plot_pretrain_comparison(
             std = pretrained_results[0]['metrics'][f'{metric}_std']
             steps = pretrained_results[0]['steps']
             
-            axes[idx].plot(steps, mean, label=f'Pretrained Priors (σ={sigma})', color=sigma_color)
+            axes[idx].plot(steps, mean, label=f'Pretrained Priors (τ={sigma})', color=sigma_color)
             axes[idx].fill_between(steps, mean - std, mean + std, 
                                  alpha=0.2, color=sigma_color)
         
