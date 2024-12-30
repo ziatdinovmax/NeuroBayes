@@ -1,4 +1,8 @@
+import logging
+logger = logging.getLogger(__name__)
+
 from typing import Dict, Tuple, Optional, Union, List, Type
+
 import jax
 import jax.random as jra
 import jax.numpy as jnp
@@ -10,6 +14,7 @@ from numpyro.infer import MCMC, NUTS, init_to_median, Predictive
 from numpyro.contrib.module import random_flax_module
 
 from ..utils import put_on_device, flatten_params_dict
+
 
 
 class BNN:
@@ -80,6 +85,8 @@ class BNN:
             progress_bar: bool = True, device: Optional[str] = None,
             rng_key: Optional[jnp.array] = None,
             extra_fields: Optional[Tuple[str, ...]] = (),
+            max_num_restarts: int = 1,
+            min_accept_prob: float = 0.55
             ) -> None:
         """
         Run No-U-Turn Sampler (NUTS) to infer parameters of the Bayesian Neural Network.
@@ -103,6 +110,10 @@ class BNN:
             rng_key (jnp.ndarray, optional): Random number generator key. If None, uses a default key.
             extra_fields (Tuple[str, ...], optional): Extra fields (e.g. 'accept_prob') to collect 
                 during the MCMC run. Accessible via model.mcmc.get_extra_fields() after training.
+            max_num_restarts (int, optional): Maximum number of fitting attempts for single chain. 
+                Ignored if num_chains > 1. Defaults to 1.
+            min_accept_prob (float, optional): Minimum acceptance probability threshold. 
+                Only used if num_chains = 1. Defaults to 0.55.
 
         Returns:
             None: The method updates the model's internal state but does not return a value.
@@ -111,25 +122,43 @@ class BNN:
             After running this method, the MCMC samples are stored in the `mcmc` attribute
             of the model and can be accessed via .get_samples() method for further analysis.
         """
-        key = rng_key if rng_key is not None else jra.PRNGKey(0)
         X, y = self.set_data(X, y)
         X, y = put_on_device(device, X, y)
+        kernel = NUTS(self.model, init_strategy=init_to_median(num_samples=10))
+
+        # Multiple chains: single run with split keys
+        if num_chains > 1:
+            key = jra.split(rng_key if rng_key is not None else jra.PRNGKey(0), num_chains)
+            self.mcmc = MCMC(kernel, num_warmup=num_warmup, num_samples=num_samples,
+                            num_chains=num_chains, chain_method=chain_method,
+                            progress_bar=progress_bar, jit_model_args=False)
+            self.mcmc.run(key, X, y, priors_sigma, extra_fields=extra_fields)
+            return
+
+        # Single chain with restarts
+        best_mcmc = None
+        best_prob = -1.0
+        fields = ('accept_prob',) if 'accept_prob' not in extra_fields else extra_fields
+
+        for i in range(max_num_restarts):
+            key = rng_key if i == 0 and rng_key is not None else jra.PRNGKey(i)
+            self.mcmc = MCMC(kernel, num_warmup=num_warmup, num_samples=num_samples,
+                            num_chains=1, progress_bar=progress_bar, jit_model_args=False)
+            
+            self.mcmc.run(key, X, y, priors_sigma, extra_fields=fields)
+            prob = self.mcmc.get_extra_fields()['accept_prob'].mean()
+            
+            if prob > best_prob:
+                best_mcmc, best_prob = self.mcmc, prob
+                
+            if prob > min_accept_prob:
+                return
+            
+            if i < max_num_restarts - 1:
+                logger.warning(f"MCMC restart {i+1}/{max_num_restarts}: acceptance rate {prob:.3f} below {min_accept_prob}")
         
-        init_strategy = init_to_median(num_samples=10)
-        kernel = NUTS(self.model, init_strategy=init_strategy)
-        self.mcmc = MCMC(
-            kernel,
-            num_warmup=num_warmup,
-            num_samples=num_samples,
-            num_chains=num_chains,
-            chain_method=chain_method,
-            progress_bar=progress_bar,
-            jit_model_args=False
-        )
-        self.mcmc.run(
-            key, X, y,
-            priors_sigma,
-            extra_fields=extra_fields)
+        self.mcmc = best_mcmc
+        logger.warning(f"Using best run (acceptance rate: {best_prob:.3f})")
 
     def sample_noise(self) -> jnp.ndarray:
         """

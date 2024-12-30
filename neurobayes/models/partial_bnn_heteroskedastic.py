@@ -173,7 +173,8 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
             sgd_batch_size: Optional[int] = None, sgd_wa_epochs: Optional[int] = 10,
             map_sigma: float = 1.0, priors_sigma: float = 1.0,
             progress_bar: bool = True, device: str = None, rng_key: Optional[jnp.array] = None,
-            extra_fields: Optional[Tuple[str]] = ()
+            extra_fields: Optional[Tuple[str]] = (),
+            **kwargs
             ) -> None:
         """
         Run HMC to infer parameters of the heteroskedastic BNN
@@ -203,6 +204,10 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
             extra_fields:
                 Extra fields (e.g. 'accept_prob') to collect during the HMC run.
                 The extra fields are accessible from model.mcmc.get_extra_fields() after model training.
+            **max_num_restarts (int, optional): Maximum number of fitting attempts for single chain. 
+                Ignored if num_chains > 1. Defaults to 1.
+            **min_accept_prob (float, optional): Minimum acceptance probability threshold. 
+                Only used if num_chains = 1. Defaults to 0.55.
         """
         if not self.deterministic_weights:
             print("Training deterministic NN...")

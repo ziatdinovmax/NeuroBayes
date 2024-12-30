@@ -119,7 +119,8 @@ class PartialBNN(BNN):
             map_sigma: float = 1.0, priors_sigma: float = 1.0,
             progress_bar: bool = True, device: str = None,
             rng_key: Optional[jnp.array] = None,
-            extra_fields: Optional[Tuple[str, ...]] = ()
+            extra_fields: Optional[Tuple[str, ...]] = (),
+            **kwargs
             ) -> None:
         """
         Infer parameters of the partial BNN
@@ -150,6 +151,10 @@ class PartialBNN(BNN):
             rng_key (Optional[jnp.ndarray], optional): Random number generator key. Defaults to None.
             extra_fields (Optional[Tuple[str, ...]], optional): Extra fields to collect during the MCMC run. 
                 Defaults to ().
+            **max_num_restarts (int, optional): Maximum number of fitting attempts for single chain. 
+                Ignored if num_chains > 1. Defaults to 1.
+            **min_accept_prob (float, optional): Minimum acceptance probability threshold. 
+                Only used if num_chains = 1. Defaults to 0.55.
         """
         if not self.deterministic_weights:
             print("Training deterministic NN...")
@@ -163,4 +168,4 @@ class PartialBNN(BNN):
             print("Training partially Bayesian NN")
         super().fit(
             X, y, num_warmup, num_samples, num_chains, chain_method,
-            priors_sigma, progress_bar, device, rng_key, extra_fields)
+            priors_sigma, progress_bar, device, rng_key, extra_fields, **kwargs)
