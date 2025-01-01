@@ -34,7 +34,7 @@ def create_swa_schedule(
                 # Before 75%: constant high learning rate
                 return initial_lr, False
             
-            decay_epochs = int(0.1 * total_epochs)  # 10% for decay
+            decay_epochs = int(0.05 * total_epochs)  # 5% for decay
             decay_end = start_epoch + decay_epochs
             
             if epoch < decay_end:
@@ -68,7 +68,7 @@ def create_swa_schedule(
                 # Before SWA: high learning rate, no collection
                 return initial_lr, False
                 
-            decay_epochs = int(0.1 * total_epochs)  # 10% of epochs for decay
+            decay_epochs = int(0.05 * total_epochs)  # 10% of epochs for decay
             decay_end = start_epoch + decay_epochs
             
             if epoch < decay_end:
