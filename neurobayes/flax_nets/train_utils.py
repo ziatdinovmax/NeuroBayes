@@ -48,7 +48,7 @@ def create_swa_schedule(
             should_collect = cycle_pos == 0
             
             # Define cycle peak to be midway between swa_lr and the lr at decay end
-            cycle_peak = swa_lr + (swa_lr - initial_lr) * 0.5
+            cycle_peak = swa_lr + (initial_lr - swa_lr) * 0.5
             
             # Upward then downward triangle wave
             if cycle_pos < cycle_length / 2:
