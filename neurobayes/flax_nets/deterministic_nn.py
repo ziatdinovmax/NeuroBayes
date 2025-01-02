@@ -10,9 +10,10 @@ from tqdm import tqdm
 from .train_utils import create_swa_schedule
 from ..utils.utils import split_in_batches
 
+
 class TrainState(train_state.TrainState):
     batch_stats: Any
-    collected_weights: List
+
 
 class DeterministicNN:
     """
@@ -63,7 +64,6 @@ class DeterministicNN:
             params=params,
             tx=self.optimizer,
             batch_stats=None,
-            collected_weights=[]
         )
 
         self.learning_rate = learning_rate
