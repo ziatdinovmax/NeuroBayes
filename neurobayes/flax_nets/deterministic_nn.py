@@ -24,7 +24,19 @@ class DeterministicNN:
         learning_rate: Initial learning rate
         map: Uses maximum a posteriori approximation
         sigma: Standard deviation for Gaussian prior
-        swa_config: SWA configuration dictionary
+        swa_config: Dictionary configuring the Stochastic Weight Averaging behavior:
+            - 'schedule': Type of learning rate schedule and weight collection strategy.
+                Options:
+                - 'constant': Uses constant learning rate, collects weights after start_pct
+                - 'linear': Linearly decays learning rate to swa_lr, then collects weights
+                - 'cyclic': Cycles learning rate between swa_lr and a peak value, collecting at cycle starts
+            - 'start_pct': When to start SWA as fraction of total epochs (default: 0.95)
+            - 'swa_lr': Final/SWA learning rate (default: same as initial learning_rate)
+            Additional parameters based on schedule type:
+            - For 'linear' and 'cyclic':
+                - 'decay_fraction': Fraction of total epochs for decay period (default: 0.05)
+            - For 'cyclic' only:
+                - 'cycle_length': Number of epochs per cycle (required)
     """
     def __init__(self,
                  architecture: Type[flax.linen.Module],
@@ -51,7 +63,6 @@ class DeterministicNN:
             'schedule': 'constant',
             'start_pct': 0.95,
             'swa_lr': learning_rate,  # Same as initial for constant schedule
-            'cycle_length': None
         }
         
         # Update with user config if provided
@@ -101,7 +112,8 @@ class DeterministicNN:
             swa_lr=self.swa_config['swa_lr'],
             start_epoch=start_epoch,
             total_epochs=epochs,
-            cycle_length=self.swa_config['cycle_length']
+            cycle_length=self.swa_config.get('cycle_length'),
+            decay_fraction=self.swa_config.get('decay_fraction', 0.05)
         )
         
         X_batches = split_in_batches(X_train, batch_size)
