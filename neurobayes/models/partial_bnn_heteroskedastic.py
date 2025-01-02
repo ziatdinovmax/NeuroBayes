@@ -170,7 +170,7 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
             num_warmup: int = 2000, num_samples: int = 2000,
             num_chains: int = 1, chain_method: str = 'sequential',
             sgd_epochs: Optional[int] = None, sgd_lr: Optional[float] = 0.01,
-            sgd_batch_size: Optional[int] = None, sgd_wa_epochs: Optional[int] = 10,
+            sgd_batch_size: Optional[int] = None, swa_config: Optional[Dict] = None,
             map_sigma: float = 1.0, priors_sigma: float = 1.0,
             progress_bar: bool = True, device: str = None, rng_key: Optional[jnp.array] = None,
             extra_fields: Optional[Tuple[str]] = (),
@@ -193,7 +193,9 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
             sgd_batch_size:
                 Batch size for SGD training (if trained weights are not provided at the initialization stage).
                 Defaults to None, meaning that an entire dataset is passed through an NN.
-            sgd_wa_epochs: Number of epochs for stochastic weight averaging at the end of SGD training trajectory (defautls to 10)
+            swa_config (dict, optional):
+                Stochastic weight averaging protocol. Defaults to averaging weights
+                at the end of training trajectory (the last 5% of SGD epochs).
             map_sigma: sigma in gaussian prior for regularized SGD training
             priors_sigma: Standard deviation for default or pretrained priors (defaults to 1.0)
             progress_bar: show progress bar
@@ -216,7 +218,7 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
                 self.deterministic_nn,
                 input_shape = X.shape[1:] if X.ndim > 2 else (X.shape[-1],), # different input dims for ConvNet and MLP 
                 loss='heteroskedastic', learning_rate=sgd_lr,
-                swa_epochs=sgd_wa_epochs, sigma=map_sigma)
+                swa_config=swa_config, sigma=map_sigma)
             det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs, sgd_batch_size)
             self.deterministic_weights = det_nn.state.params
             print("Training partially Bayesian NN")
