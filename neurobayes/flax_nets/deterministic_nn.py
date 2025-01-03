@@ -1,4 +1,4 @@
-from typing import Dict, Type, Any, Union, Tuple
+from typing import Dict, Type, Any, Union, Tuple, List, Optional, Callable
 import jax
 import jax.numpy as jnp
 import flax
@@ -6,29 +6,38 @@ from flax.training import train_state
 import optax
 from functools import partial
 from tqdm import tqdm
-import numpy as np
 
-from ..utils.utils import split_in_batches, monitor_dnn_loss
+from .train_utils import create_swa_schedule
+from ..utils.utils import split_in_batches
 
 
 class TrainState(train_state.TrainState):
     batch_stats: Any
 
+
 class DeterministicNN:
-
     """
-    Class for training and predicting with deterministic neural network.
-
     Args:
         architecture: a Flax model
         input_shape: (n_samples, n_features) or (n_samples, *dims, n_channels)
         loss: type of loss, 'homoskedastic' (default) or 'heteroskedastic'
-        learning_rate: SGD learning rate
-        map: Uses maximum a posteriori approximation with a zero-centered Gaussian prior
-        sigma: Standard deviation for a Gaussian prior
-        swa_epochs: Number of epochs for stochastic weight averaging at the end of training trajectory (defautls to 10)
+        learning_rate: Initial learning rate
+        map: Uses maximum a posteriori approximation
+        sigma: Standard deviation for Gaussian prior
+        swa_config: Dictionary configuring the Stochastic Weight Averaging behavior:
+            - 'schedule': Type of learning rate schedule and weight collection strategy.
+                Options:
+                - 'constant': Uses constant learning rate, collects weights after start_pct
+                - 'linear': Linearly decays learning rate to swa_lr, then collects weights
+                - 'cyclic': Cycles learning rate between swa_lr and a peak value, collecting at cycle starts
+            - 'start_pct': When to start SWA as fraction of total epochs (default: 0.95)
+            - 'swa_lr': Final/SWA learning rate (default: same as initial learning_rate)
+            Additional parameters based on schedule type:
+            - For 'linear' and 'cyclic':
+                - 'decay_fraction': Fraction of total epochs for decay period (default: 0.05)
+            - For 'cyclic' only:
+                - 'cycle_length': Number of epochs per cycle (required)
     """
-
     def __init__(self,
                  architecture: Type[flax.linen.Module],
                  input_shape: Union[int, Tuple[int]],
@@ -36,25 +45,125 @@ class DeterministicNN:
                  learning_rate: float = 0.01,
                  map: bool = True,
                  sigma: float = 1.0,
-                 swa_epochs: int = 10) -> None:
+                 swa_config: Optional[Dict] = None) -> None:
         
         input_shape = (input_shape,) if isinstance(input_shape, int) else input_shape
         self.model = architecture
-
+        
         if loss not in ['homoskedastic', 'heteroskedastic']:
             raise ValueError("Select between 'homoskedastic' or 'heteroskedastic' loss")
         self.loss = loss
+        
+        # Initialize model
         key = jax.random.PRNGKey(0)
         params = self.model.init(key, jnp.ones((1, *input_shape)))['params']
+        
+        # Default SWA configuration with all required parameters
+        self.default_swa_config = {
+            'schedule': 'constant',
+            'start_pct': 0.95,
+            'swa_lr': learning_rate,  # Same as initial for constant schedule
+        }
+        
+        # Update with user config if provided
+        self.swa_config = {**self.default_swa_config, **(swa_config or {})}
+        
+        self.current_lr = learning_rate
+        self.optimizer = optax.adam(learning_rate)
         self.state = TrainState.create(
             apply_fn=self.model.apply,
             params=params,
-            tx=optax.adam(learning_rate),
-            batch_stats=None
+            tx=self.optimizer,
+            batch_stats=None,
         )
+
+        self.learning_rate = learning_rate
         self.map = map
         self.sigma = sigma
-        self.average_last_n_weights = swa_epochs
+
+        self.params_history = []
+
+    @partial(jax.jit, static_argnums=(0,))
+    def train_step(self, state, inputs, targets):
+        """JIT-compiled training step"""
+        loss, grads = jax.value_and_grad(self.total_loss)(state.params, inputs, targets)
+        state = state.apply_gradients(grads=grads)
+        return state, loss
+    
+    def update_learning_rate(self, learning_rate: float):
+        """Update the optimizer with a new learning rate"""
+        if learning_rate != self.current_lr:
+            self.current_lr = learning_rate
+            self.state = self.state.replace(tx=optax.adam(learning_rate))
+
+    def train(self, X_train: jnp.ndarray, y_train: jnp.ndarray, epochs: int, batch_size: int = None) -> None:
+        X_train, y_train = self.set_data(X_train, y_train)
+        
+        if batch_size is None or batch_size >= len(X_train):
+            batch_size = len(X_train)
+
+        # Calculate SWA start epoch
+        start_epoch = int(epochs * self.swa_config['start_pct'])
+        
+        # Create learning rate schedule
+        lr_schedule = create_swa_schedule(
+            schedule_type=self.swa_config['schedule'],
+            initial_lr=self.learning_rate,
+            swa_lr=self.swa_config['swa_lr'],
+            start_epoch=start_epoch,
+            total_epochs=epochs,
+            cycle_length=self.swa_config.get('cycle_length'),
+            decay_fraction=self.swa_config.get('decay_fraction', 0.05)
+        )
+        
+        X_batches = split_in_batches(X_train, batch_size)
+        y_batches = split_in_batches(y_train, batch_size)
+        num_batches = len(X_batches)
+        
+        with tqdm(total=epochs, desc="Training Progress", leave=True) as pbar:
+            for epoch in range(epochs):
+                # Get learning rate and collection decision from schedule
+                learning_rate, should_collect = lr_schedule(epoch)
+                # Update learning rate if needed 
+                self.update_learning_rate(learning_rate)
+                
+                epoch_loss = 0.0
+                for i, (X_batch, y_batch) in enumerate(zip(X_batches, y_batches)):
+                    self.state, batch_loss = self.train_step(self.state, X_batch, y_batch)
+                    epoch_loss += batch_loss
+                
+                # Collect weights if scheduled
+                if should_collect:
+                    self._store_params(self.state.params)
+                
+                avg_epoch_loss = epoch_loss / num_batches
+                pbar.set_postfix_str(
+                    f"Epoch {epoch+1}/{epochs}, "
+                    f"LR: {learning_rate:.6f}, "
+                    f"Loss: {avg_epoch_loss:.4f} "
+                )
+                pbar.update(1)
+                
+        # Average collected weights if any were collected
+        if self.params_history:
+            self.state = self.state.replace(params=self.average_params())
+
+    def _store_params(self, params: Dict) -> None:
+        self.params_history.append(params)
+
+    def average_params(self) -> Dict:
+        if not self.params_history:
+            return self.state.params
+            
+        # Compute the element-wise average of all stored parameters
+        avg_params = jax.tree_util.tree_map(
+            lambda *param_trees: jnp.mean(jnp.stack(param_trees), axis=0),
+            *self.params_history
+        )
+        return avg_params
+
+    def reset_swa(self):
+        """Reset SWA collections"""
         self.params_history = []
 
     def mse_loss(self, params: Dict, inputs: jnp.ndarray,
@@ -63,90 +172,36 @@ class DeterministicNN:
         return jnp.mean((predictions - targets) ** 2)
     
     def heteroskedastic_loss(self, params: Dict, inputs: jnp.ndarray,
-                             targets: jnp.ndarray) -> jnp.ndarray:
+                            targets: jnp.ndarray) -> jnp.ndarray:
         y_pred, y_var = self.model.apply({'params': params}, inputs)
         return jnp.mean(0.5 * jnp.log(y_var) + 0.5 * (targets - y_pred)**2 / y_var)
     
     def gaussian_prior(self, params: Dict) -> jnp.ndarray:
         l2_norm = sum(jnp.sum(jnp.square(p)) for p in jax.tree_util.tree_leaves(params))
-        return l2_norm / (2 * self.sigma**2)  # Regularization term
+        return l2_norm / (2 * self.sigma**2)
     
     def total_loss(self, params: Dict, inputs: jnp.ndarray, targets: jnp.ndarray) -> jnp.ndarray:
-        # Compute the base loss
         loss_fn = self.mse_loss if self.loss == 'homoskedastic' else self.heteroskedastic_loss
         loss = loss_fn(params, inputs, targets)
-        # Optionally add Gaussian prior to the loss
         if self.map:
             prior_loss = self.gaussian_prior(params) / len(inputs)
             loss += prior_loss
         return loss
 
-    @partial(jax.jit, static_argnums=(0,))
-    def train_step(self, state, inputs, targets):
-        loss, grads = jax.value_and_grad(self.total_loss)(state.params, inputs, targets)
-        state = state.apply_gradients(grads=grads)
-        return state, loss
-
-    def train(self, X_train: jnp.ndarray, y_train: jnp.ndarray, epochs: int, batch_size: int = None) -> None:
-        X_train, y_train = self.set_data(X_train, y_train)
-        
-        if batch_size is None or batch_size >= len(X_train):
-            batch_size = len(X_train)
-        
-        X_batches = split_in_batches(X_train, batch_size)
-        y_batches = split_in_batches(y_train, batch_size)
-        num_batches = len(X_batches)
-        
-        with tqdm(total=epochs, desc="Training Progress", leave=True) as pbar:  # Progress bar tracks epochs now
-            #avg_epoch_losses = np.zeros(epochs) 
-            for epoch in range(epochs):
-                epoch_loss = 0.0
-                for i, (X_batch, y_batch) in enumerate(zip(X_batches, y_batches)):
-                    self.state, batch_loss = self.train_step(self.state, X_batch, y_batch)
-                    epoch_loss += batch_loss
-                
-                # Start storing parameters in the last n epochs
-                if epochs - epoch <= self.average_last_n_weights:
-                    self._store_params(self.state.params)
-                
-                avg_epoch_loss = epoch_loss / num_batches
-                
-                #avg_epoch_losses[epoch] = avg_epoch_loss
-                # if epoch > 0:
-                #     monitor_dnn_loss(avg_epoch_losses)
-
-                pbar.set_postfix_str(f"Epoch {epoch+1}/{epochs}, Avg Loss: {avg_epoch_loss:.4f}")
-                pbar.update(1)
-        if self.params_history:  # Ensure there is something to average
-            self.state = self.state.replace(params=self.average_params())
+    def predict(self, X: jnp.ndarray) -> jnp.ndarray:
+        X = self.set_data(X)
+        return self._predict(self.state, X)
 
     @partial(jax.jit, static_argnums=(0,))
     def _predict(self, state, X):
         return state.apply_fn({'params': state.params}, X)
-
-    def predict(self, X):
-        X = self.set_data(X)
-        return self._predict(self.state, X)
     
-    def set_data(self, X: jnp.ndarray, y: jnp.ndarray = None)  -> jnp.ndarray:
+    def set_data(self, X: jnp.ndarray, y: jnp.ndarray = None) -> jnp.ndarray:
         X = X if X.ndim > 1 else X[:, None]
         if y is not None:
             y = y[:, None] if y.ndim < 2 else y
             return X, y
         return X
-    
-    def _store_params(self, params: Dict) -> None:
-        self.params_history.append(params)
 
-    def average_params(self) -> Dict:
-        if not self.params_history:
-            return self.state.params
-        # Compute the element-wise average of all stored parameters
-        avg_params = jax.tree_util.tree_map(
-            lambda *param_trees: jnp.mean(jnp.stack(param_trees), axis=0),
-            *self.params_history
-        )
-        return avg_params
-    
     def get_params(self) -> Dict:
         return self.state.params
