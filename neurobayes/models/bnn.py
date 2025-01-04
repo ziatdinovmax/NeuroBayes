@@ -2,11 +2,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 from typing import Dict, Tuple, Optional, Union, List, Type
+from enum import Enum
 
 import jax
 import jax.random as jra
 import jax.numpy as jnp
 import flax
+from jax.nn import softmax
 
 import numpyro
 import numpyro.distributions as dist
@@ -16,42 +18,61 @@ from numpyro.contrib.module import random_flax_module
 from ..utils import put_on_device, flatten_params_dict
 
 
-
 class BNN:
     """
-    A Fully Bayesian Neural Network (BNN).
+    A Bayesian Neural Network (BNN) for both regression and classification tasks.
 
-    This model treats the weights in a neural network as probabilistic distributions and utilizes 
-    the No-U-Turn Sampler to sample directly from the posterior distribution. This approach allows 
-    the BNN to account for all plausible weight configurations, enabling it to make probabilistic 
-    predictions. Instead of single-point estimates, it provides entire distributions of possible 
-    outcomes, thus quantifying the inherent uncertainty.
+    This model automatically determines the task type based on num_classes:
+    - If num_classes is None: Regression task
+    - If num_classes >= 2: Classification task with specified number of classes
 
     Args:
         architecture: a Flax model
+        num_classes (int, optional): Number of classes for classification task.
+            If None, the model performs regression. Defaults to None.
         noise_prior (dist.Distribution, optional): Prior probability distribution over 
-            observational noise. Defaults to HalfNormal(1.0).
-        pretrained_priors (Dict, optional):
-            Dictionary with pre-trained weights for the provided model architecture.
-            These weight values will be used to initialize prior distributions in BNN.
+            observational noise for regression. Defaults to HalfNormal(1.0).
+        pretrained_priors (Dict, optional): Dictionary with pre-trained weights.
+            
+    Note:
+        For input labels y:
+        - Regression (num_classes=None): y should be a 1D array of shape (n_samples,) for single output
+          or 2D array of shape (n_samples, n_outputs) for multiple outputs
+        - Binary classification (num_classes=2): y should be a 1D array of shape (n_samples,)
+          containing 0s and 1s
+        - Multi-class classification (num_classes>2): y should be a 1D array of shape (n_samples,)
+          containing class indices from 0 to num_classes-1
     """
     def __init__(self,
                  architecture: Type[flax.linen.Module],
+                 num_classes: Optional[int] = None,
                  noise_prior: Optional[dist.Distribution] = None,
                  pretrained_priors: Optional[Dict[str, Dict[str, jnp.ndarray]]] = None
                  ) -> None:
-        if noise_prior is None:
-            noise_prior = dist.HalfNormal(1.0)
         self.nn = architecture
-        self.noise_prior = noise_prior
+        self.num_classes = num_classes
+        
+        if num_classes is not None and num_classes < 2:
+            raise ValueError("num_classes must be at least 2 for classification or None for regression")
+        
+        # Set noise prior only for regression tasks
+        self.noise_prior = noise_prior if num_classes is None else None
+        if self.noise_prior is None and num_classes is None:
+            self.noise_prior = dist.HalfNormal(1.0)
+            
         self.pretrained_priors = pretrained_priors
+
+    @property
+    def is_regression(self) -> bool:
+        """Check if the model is performing regression"""
+        return self.num_classes is None
 
     def model(self,
               X: jnp.ndarray,
               y: jnp.ndarray = None,
               priors_sigma: float = 1.0,
               **kwargs) -> None:
-        """BNN model"""
+        """Unified BNN model for both regression and classification"""
 
         pretrained_priors = (flatten_params_dict(self.pretrained_priors) 
                            if self.pretrained_priors is not None else None)
@@ -65,18 +86,19 @@ class BNN:
             return dist.Normal(0., priors_sigma)
         
         input_shape = X.shape[1:] if X.ndim > 2 else (X.shape[-1],)
-
         net = random_flax_module(
             "nn", self.nn, input_shape=(1, *input_shape), prior=prior)
 
-        # Pass inputs through a NN with the sampled parameters
-        mu = numpyro.deterministic("mu", net(X))
-
-        # Sample noise
-        sig = self.sample_noise()
-
-        # Score against the observed data points
-        numpyro.sample("y", dist.Normal(mu, sig), obs=y)
+        if self.is_regression:
+            # Regression case
+            mu = numpyro.deterministic("mu", net(X))
+            sig = numpyro.sample("sig", self.noise_prior)
+            numpyro.sample("y", dist.Normal(mu, sig), obs=y)
+        else:
+            # Classification case
+            logits = net(X)
+            probs = numpyro.deterministic("probs", softmax(logits, axis=-1))
+            numpyro.sample("y", dist.Categorical(probs=probs), obs=y)
 
     def fit(self, X: jnp.ndarray, y: jnp.ndarray,
             num_warmup: int = 2000, num_samples: int = 2000,
@@ -122,6 +144,7 @@ class BNN:
             After running this method, the MCMC samples are stored in the `mcmc` attribute
             of the model and can be accessed via .get_samples() method for further analysis.
         """
+        
         X, y = self.set_data(X, y)
         X, y = put_on_device(device, X, y)
         kernel = NUTS(self.model, init_strategy=init_to_median(num_samples=10))
@@ -160,12 +183,6 @@ class BNN:
         self.mcmc = best_mcmc
         logger.warning(f"Using best run (acceptance rate: {best_prob:.3f})")
 
-    def sample_noise(self) -> jnp.ndarray:
-        """
-        Sample observational noise variance
-        """
-        return numpyro.sample("sig", self.noise_prior)
-    
     def get_samples(self, chain_dim: bool = False) -> Dict[str, jnp.ndarray]:
         """Get posterior samples (after running the MCMC chains)"""
         return self.mcmc.get_samples(group_by_chain=chain_dim)
@@ -175,28 +192,19 @@ class BNN:
                 samples: Optional[Dict[str, jnp.ndarray]] = None,
                 device: Optional[str] = None,
                 rng_key: Optional[jnp.ndarray] = None
-                ) -> Tuple[jnp.ndarray, jnp.ndarray]:
+                ) -> Union[Tuple[jnp.ndarray, jnp.ndarray], 
+                         Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]]:
         """
-        Predict the mean and variance of the target values for new inputs.
+        Predict outputs for new inputs.
 
         Args:
-            X_new (jnp.ndarray): New input data for predictions. Should have the same structure
-                as the training input X: 2D array of shape (n_samples, n_features) for MLP, or
-                N-D array of shape (n_samples, *dims, n_channels) for ConvNet.
-            samples (Dict[str, jnp.ndarray], optional): Dictionary of posterior samples with 
-                inferred model parameters (weights and biases). Uses samples from 
-                the last MCMC run by default.
-            device (str, optional): The device to perform computation on ('cpu', 'gpu'). 
-                If None, uses the JAX default device.
-            rng_key (jnp.ndarray, optional): Random number generator key for JAX operations. 
-                If None, a default key is used.
+            X_new (jnp.ndarray): New input data for predictions
+            samples (Dict[str, jnp.ndarray], optional): Dictionary of posterior samples
+            device (str, optional): The device to perform computation on
+            rng_key (jnp.ndarray, optional): Random number generator key
 
         Returns:
-            Tuple[jnp.ndarray, jnp.ndarray]: A tuple containing:
-                - posterior_mean (jnp.ndarray): Mean of the posterior predictive distribution.
-                Shape: (n_samples, target_dim).
-                - posterior_var (jnp.ndarray): Variance of the posterior predictive distribution.
-                Shape: (n_samples, target_dim).
+                Tuple[jnp.ndarray, jnp.ndarray]: (posterior_mean, posterior_var)
         """
         X_new = self.set_data(X_new)
 
@@ -206,18 +214,43 @@ class BNN:
             samples = self.get_samples(chain_dim=False)
         X_new, samples = put_on_device(device, X_new, samples)
 
-        predictions = self.sample_from_posterior(
-            rng_key, X_new, samples, return_sites=["mu", "y"])
-        posterior_mean = predictions["mu"].mean(0)
-        posterior_var = predictions["y"].var(0)
+        if self.is_regression: # Regression
+            predictions = self.sample_from_posterior(
+                rng_key, X_new, samples, return_sites=["mu", "y"])
+            posterior_mean = predictions["mu"].mean(0)
+            posterior_var = predictions["y"].var(0)
+        
+        else:  # Classification
+            predictions = self.sample_from_posterior(
+                rng_key, X_new, samples, return_sites=["probs"])
+            predictive_probs = predictions["probs"]
+            posterior_mean = predictive_probs.mean(0)
+            posterior_var = predictive_probs.var(0)
+                
         return posterior_mean, posterior_var
+        
+    def predict_classes(self,
+                      X_new: jnp.ndarray,
+                      samples: Optional[Dict[str, jnp.ndarray]] = None,
+                      device: Optional[str] = None,
+                      rng_key: Optional[jnp.ndarray] = None
+                      ) -> jnp.ndarray:
+        """
+        Predict class labels for classification tasks
+        """
+        if self.is_regression:
+            raise ValueError("predict_classes() is only for classification tasks")
+            
+        probs_mean, _ = self.predict(X_new, samples, device, rng_key)
+        
+        return jnp.argmax(probs_mean, axis=-1)
 
     def sample_from_posterior(self,
-                              rng_key: jnp.ndarray,
-                              X_new: jnp.ndarray,
-                              samples: Dict[str, jnp.ndarray],
-                              return_sites: Optional[List[str]] = None
-                              ) -> jnp.ndarray:
+                            rng_key: jnp.ndarray,
+                            X_new: jnp.ndarray,
+                            samples: Dict[str, jnp.ndarray],
+                            return_sites: Optional[List[str]] = None
+                            ) -> jnp.ndarray:
         """Sample from posterior distribution at new inputs X_new"""
         predictive = Predictive(
             self.model, samples,
@@ -226,9 +259,22 @@ class BNN:
         return predictive(rng_key, X_new)
 
     def set_data(self, X: jnp.ndarray, y: Optional[jnp.ndarray] = None
-                 ) -> Union[Tuple[jnp.ndarray], jnp.ndarray]:
+             ) -> Union[Tuple[jnp.ndarray], jnp.ndarray]:
+        """
+        Prepare data for model fitting or prediction.
+        
+        Ensures consistent shapes for both X and y:
+        - X: Always at least 2D
+        - y: Shape depends on task type:
+            - Regression: 2D array (n_samples, n_outputs)
+            - Classification (binary or multi-class): 1D array (n_samples,)
+        """
         X = X if X.ndim > 1 else X[:, None]
+        
         if y is not None:
-            y = y[:, None] if y.ndim < 2 else y
+            if self.is_regression:
+                y = y[:, None] if y.ndim < 2 else y  # Regression
+            else:
+                y = y.reshape(-1)  # Classification (both binary and multi-class)
             return X, y
         return X
