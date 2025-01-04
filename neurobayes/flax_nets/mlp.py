@@ -21,6 +21,7 @@ class FlaxMLP(nn.Module):
     hidden_dims: Sequence[int]
     target_dim: int
     activation: str = 'tanh'
+    classification: bool = False  # Explicit flag for classification tasks
 
     @nn.compact
     def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
@@ -38,17 +39,16 @@ class FlaxMLP(nn.Module):
             )
             x = layer(x)
 
-        # Output layer (no activation)
-        if self.target_dim:
-            output_layer = MLPLayerModule(
-                features=self.target_dim,
-                activation=None,
-                layer_name=f"Dense{len(self.hidden_dims)}"
-            )
-            x = output_layer(x)
+        # Output layer
+        output_layer = MLPLayerModule(
+            features=self.target_dim,
+            activation=nn.softmax if self.classification else None,
+            layer_name=f"Dense{len(self.hidden_dims)}"
+        )
+        x = output_layer(x)
 
         return x
-
+    
 
 class FlaxMLP2Head(nn.Module):
     hidden_dims: Sequence[int]

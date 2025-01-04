@@ -1,5 +1,6 @@
 from typing import Dict, Optional, Type, Tuple, Union, List
 import jax.numpy as jnp
+from jax.nn import softmax
 
 import numpyro
 import numpyro.distributions as dist
@@ -25,6 +26,8 @@ class PartialBNN(BNN):
             Number of layers at the end of deterministic_nn to be treated as fully stochastic ('Bayesian')
         probabilistic_layer_names:
             Names of neural network modules to be treated probabilistically
+        num_classes: Number of classes for classification task.
+            If None, the model performs regression. Defaults to None.
         noise_prior:
             Custom prior for observational noise distribution
     """
@@ -34,9 +37,10 @@ class PartialBNN(BNN):
                  deterministic_weights: Optional[Dict[str, jnp.ndarray]] = None,
                  num_probabilistic_layers: int = None,
                  probabilistic_layer_names: List[str] = None,
+                 num_classes: Optional[int] = None,
                  noise_prior: Optional[dist.Distribution] = None
                  ) -> None:
-        super().__init__(None, noise_prior=noise_prior)
+        super().__init__(None, num_classes, noise_prior)
         
         self.deterministic_nn = deterministic_nn
         self.deterministic_weights = deterministic_weights
@@ -102,14 +106,15 @@ class PartialBNN(BNN):
                 }
                 current_input = layer.apply(params, current_input)
 
-        # Register final output
-        mu = numpyro.deterministic("mu", current_input)
-
-        # Sample noise
-        sig = self.sample_noise()
-
-        # Score against the observed data points
-        numpyro.sample("y", dist.Normal(mu, sig), obs=y)
+        if self.is_regression:
+            # Regression case
+            mu = numpyro.deterministic("mu", net(current_input))
+            sig = numpyro.sample("sig", self.noise_prior)
+            numpyro.sample("y", dist.Normal(mu, sig), obs=y)
+        else:
+            # Classification case
+            probs = numpyro.deterministic("probs", softmax(current_input, axis=-1))
+            numpyro.sample("y", dist.Categorical(probs=probs), obs=y)
 
     def fit(self, X: jnp.ndarray, y: jnp.ndarray,
             num_warmup: int = 2000, num_samples: int = 2000,
@@ -164,6 +169,7 @@ class PartialBNN(BNN):
             det_nn = DeterministicNN(
                 self.deterministic_nn,
                 input_shape = X.shape[1:] if X.ndim > 2 else (X.shape[-1],), # different input shape for ConvNet and MLP
+                loss='homoskedastic' if self.is_regression else 'classification',
                 learning_rate=sgd_lr, swa_config=swa_config, sigma=map_sigma)
             det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs, sgd_batch_size)
             self.deterministic_weights = det_nn.state.params
