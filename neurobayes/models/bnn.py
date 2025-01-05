@@ -214,20 +214,24 @@ class BNN:
             samples = self.get_samples(chain_dim=False)
         X_new, samples = put_on_device(device, X_new, samples)
 
-        if self.is_regression: # Regression
+        if self.is_regression:  # Regression
             predictions = self.sample_from_posterior(
                 rng_key, X_new, samples, return_sites=["mu", "y"])
             posterior_mean = predictions["mu"].mean(0)
-            posterior_var = predictions["y"].var(0)
+            uncertainty = predictions["y"].var(0)  # Predictive variance
         
         else:  # Classification
             predictions = self.sample_from_posterior(
                 rng_key, X_new, samples, return_sites=["probs"])
             predictive_probs = predictions["probs"]
             posterior_mean = predictive_probs.mean(0)
-            posterior_var = predictive_probs.var(0)
+            
+            # Calculate total uncertainty (expected entropy)
+            sample_entropies = -jnp.sum(
+                predictive_probs * jnp.log(predictive_probs + 1e-10), axis=-1)
+            uncertainty = jnp.mean(sample_entropies, axis=0)
                 
-        return posterior_mean, posterior_var
+        return posterior_mean, uncertainty
         
     def predict_classes(self,
                       X_new: jnp.ndarray,
