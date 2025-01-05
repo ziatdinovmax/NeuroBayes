@@ -192,8 +192,7 @@ class BNN:
                 samples: Optional[Dict[str, jnp.ndarray]] = None,
                 device: Optional[str] = None,
                 rng_key: Optional[jnp.ndarray] = None
-                ) -> Union[Tuple[jnp.ndarray, jnp.ndarray], 
-                         Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]]:
+                ) -> Tuple[jnp.ndarray, jnp.ndarray]:
         """
         Predict outputs for new inputs.
 
@@ -204,7 +203,7 @@ class BNN:
             rng_key (jnp.ndarray, optional): Random number generator key
 
         Returns:
-                Tuple[jnp.ndarray, jnp.ndarray]: (posterior_mean, posterior_var)
+                Tuple[jnp.ndarray, jnp.ndarray]: (predictive mean and uncertainty)
         """
         X_new = self.set_data(X_new)
 
@@ -218,7 +217,7 @@ class BNN:
             predictions = self.sample_from_posterior(
                 rng_key, X_new, samples, return_sites=["mu", "y"])
             posterior_mean = predictions["mu"].mean(0)
-            uncertainty = predictions["y"].var(0)  # Predictive variance
+            uncertainty = predictions["y"].var(0)
         
         else:  # Classification
             predictions = self.sample_from_posterior(
