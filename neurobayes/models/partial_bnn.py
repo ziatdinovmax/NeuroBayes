@@ -87,7 +87,6 @@ class PartialBNN(BNN):
                 **({"input_dim": config['input_dim'], 
                     "kernel_size": config['kernel_size']} if config["layer_type"] == "conv" else {})
             )
-            print(layer)
             if config['is_probabilistic']:
                 net = random_flax_module(
                     layer_name, layer, 
