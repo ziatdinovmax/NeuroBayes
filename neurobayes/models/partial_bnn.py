@@ -87,7 +87,7 @@ class PartialBNN(BNN):
                 **({"input_dim": config['input_dim'], 
                     "kernel_size": config['kernel_size']} if config["layer_type"] == "conv" else {})
             )
-            
+            print(layer)
             if config['is_probabilistic']:
                 net = random_flax_module(
                     layer_name, layer, 
@@ -106,13 +106,14 @@ class PartialBNN(BNN):
                 }
                 current_input = layer.apply(params, current_input)
 
-        if self.is_regression:
-            # Regression case
+        if self.is_regression: # Regression case
             mu = numpyro.deterministic("mu", net(current_input))
             sig = numpyro.sample("sig", self.noise_prior)
             numpyro.sample("y", dist.Normal(mu, sig), obs=y)
-        else:
-            # Classification case
+        else: # Classification case
+            # Note: Even if the original deterministic_nn had softmax,
+            # it was overridden to None in extract_mlp_configs, so we  
+            # need to apply softmax here
             probs = numpyro.deterministic("probs", softmax(current_input, axis=-1))
             numpyro.sample("y", dist.Categorical(probs=probs), obs=y)
 
