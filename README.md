@@ -224,3 +224,18 @@ or
 ```bash
 pip install git+https://github.com/ziatdinovmax/NeuroBayes.git
 ```
+
+## Citation
+
+If you use NeuroBayes in your research, please cite:
+
+```bibtex
+@misc{allec_ziatdinov_PBNN2025,
+     title={Active and transfer learning with partially Bayesian neural networks for materials and chemicals}, 
+     author={Sarah I. Allec and Maxim Ziatdinov},
+     year={2025},
+     eprint={2501.00952},
+     archivePrefix={arXiv},
+     primaryClass={cond-mat.dis-nn},
+     url={https://arxiv.org/abs/2501.00952}, 
+}
