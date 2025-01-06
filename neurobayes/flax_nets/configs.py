@@ -53,6 +53,9 @@ def extract_mlp_configs(
         layer_name = f"Dense{len(mlp.hidden_dims)}"
         configs.append({
             "features": mlp.target_dim,
+            # Note: activation is explicitly None here, overriding any softmax 
+            # in the original FlaxMLP. For classification tasks, softmax will 
+            # be applied later in PartialBNN.model()
             "activation": None,
             "is_probabilistic": layer_name in probabilistic_layers,
             "layer_type": "fc",

@@ -50,8 +50,8 @@ class DeterministicNN:
         input_shape = (input_shape,) if isinstance(input_shape, int) else input_shape
         self.model = architecture
         
-        if loss not in ['homoskedastic', 'heteroskedastic']:
-            raise ValueError("Select between 'homoskedastic' or 'heteroskedastic' loss")
+        if loss not in ['homoskedastic', 'heteroskedastic', 'classification']:
+            raise ValueError("Select between 'homoskedastic', 'heteroskedastic', or 'classification' loss")
         self.loss = loss
         
         # Initialize model
@@ -176,13 +176,21 @@ class DeterministicNN:
         y_pred, y_var = self.model.apply({'params': params}, inputs)
         return jnp.mean(0.5 * jnp.log(y_var) + 0.5 * (targets - y_pred)**2 / y_var)
     
+    def cross_entropy_loss(self, params: Dict, inputs: jnp.ndarray,
+                        targets: jnp.ndarray) -> jnp.ndarray:
+        logits = self.model.apply({'params': params}, inputs)
+        return -jnp.mean(jnp.sum(targets * jax.nn.log_softmax(logits), axis=-1))
+    
     def gaussian_prior(self, params: Dict) -> jnp.ndarray:
         l2_norm = sum(jnp.sum(jnp.square(p)) for p in jax.tree_util.tree_leaves(params))
         return l2_norm / (2 * self.sigma**2)
     
     def total_loss(self, params: Dict, inputs: jnp.ndarray, targets: jnp.ndarray) -> jnp.ndarray:
-        loss_fn = self.mse_loss if self.loss == 'homoskedastic' else self.heteroskedastic_loss
-        loss = loss_fn(params, inputs, targets)
+        if self.loss == 'classification':
+            loss = self.cross_entropy_loss(params, inputs, targets)
+        else:
+            loss_fn = self.mse_loss if self.loss == 'homoskedastic' else self.heteroskedastic_loss
+            loss = loss_fn(params, inputs, targets)
         if self.map:
             prior_loss = self.gaussian_prior(params) / len(inputs)
             loss += prior_loss
@@ -194,12 +202,20 @@ class DeterministicNN:
 
     @partial(jax.jit, static_argnums=(0,))
     def _predict(self, state, X):
-        return state.apply_fn({'params': state.params}, X)
+        predictions = state.apply_fn({'params': state.params}, X)
+        if self.loss == 'classification':
+            return jax.nn.softmax(predictions)
+        return predictions
     
     def set_data(self, X: jnp.ndarray, y: jnp.ndarray = None) -> jnp.ndarray:
         X = X if X.ndim > 1 else X[:, None]
+        
         if y is not None:
-            y = y[:, None] if y.ndim < 2 else y
+            if self.loss == 'classification':
+                y = y.reshape(-1)
+                y = jax.nn.one_hot(y, num_classes=self.model.target_dim)
+            else:
+                y = y[:, None] if y.ndim < 2 else y  # Regression     
             return X, y
         return X
 
