@@ -106,7 +106,7 @@ class PartialBNN(BNN):
                 current_input = layer.apply(params, current_input)
 
         if self.is_regression: # Regression case
-            mu = numpyro.deterministic("mu", net(current_input))
+            mu = numpyro.deterministic("mu", current_input)
             sig = numpyro.sample("sig", self.noise_prior)
             numpyro.sample("y", dist.Normal(mu, sig), obs=y)
         else: # Classification case
