@@ -210,6 +210,8 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
                 Ignored if num_chains > 1. Defaults to 1.
             **min_accept_prob (float, optional): Minimum acceptance probability threshold. 
                 Only used if num_chains = 1. Defaults to 0.55.
+            **run_diagnostics (bool, optional): Run Gelman-Rubin diagnostics layer-by-layer at the end.
+                Defaults to False.
         """
         if not self.deterministic_weights:
             print("Training deterministic NN...")
@@ -223,5 +225,5 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
             self.deterministic_weights = det_nn.state.params
             print("Training partially Bayesian NN")
         super().fit(X, y, num_warmup, num_samples, num_chains, chain_method,
-                    priors_sigma, progress_bar, device, rng_key, extra_fields)
+                    priors_sigma, progress_bar, device, rng_key, extra_fields, **kwargs)
 
