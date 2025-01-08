@@ -15,7 +15,7 @@ import numpyro.distributions as dist
 from numpyro.infer import MCMC, NUTS, init_to_median, Predictive
 from numpyro.contrib.module import random_flax_module
 
-from ..utils import put_on_device, flatten_params_dict
+from ..utils import put_on_device, flatten_params_dict, MCMCDiagnostics
 
 
 class BNN:
@@ -108,7 +108,8 @@ class BNN:
             rng_key: Optional[jnp.array] = None,
             extra_fields: Optional[Tuple[str, ...]] = (),
             max_num_restarts: int = 1,
-            min_accept_prob: float = 0.55
+            min_accept_prob: float = 0.55,
+            run_diagnostics: bool = False
             ) -> None:
         """
         Run No-U-Turn Sampler (NUTS) to infer parameters of the Bayesian Neural Network.
@@ -136,6 +137,8 @@ class BNN:
                 Ignored if num_chains > 1. Defaults to 1.
             min_accept_prob (float, optional): Minimum acceptance probability threshold. 
                 Only used if num_chains = 1. Defaults to 0.55.
+            run_diagnostics (bool, optional): Run Gelman-Rubin diagnostics layer-by-layer at the end.
+                Defaults to False.
 
         Returns:
             None: The method updates the model's internal state but does not return a value.
@@ -156,32 +159,39 @@ class BNN:
                             num_chains=num_chains, chain_method=chain_method,
                             progress_bar=progress_bar, jit_model_args=False)
             self.mcmc.run(key, X, y, priors_sigma, extra_fields=extra_fields)
-            return
-
-        # Single chain with restarts
-        best_mcmc = None
-        best_prob = -1.0
-        fields = ('accept_prob',) if 'accept_prob' not in extra_fields else extra_fields
-
-        for i in range(max_num_restarts):
-            key = rng_key if i == 0 and rng_key is not None else jra.PRNGKey(i)
-            self.mcmc = MCMC(kernel, num_warmup=num_warmup, num_samples=num_samples,
-                            num_chains=1, progress_bar=progress_bar, jit_model_args=False)
-            
-            self.mcmc.run(key, X, y, priors_sigma, extra_fields=fields)
-            prob = self.mcmc.get_extra_fields()['accept_prob'].mean()
-            
-            if prob > best_prob:
-                best_mcmc, best_prob = self.mcmc, prob
-                
-            if prob > min_accept_prob:
-                return
-            
-            if i < max_num_restarts - 1:
-                logger.warning(f"MCMC restart {i+1}/{max_num_restarts}: acceptance rate {prob:.3f} below {min_accept_prob}")
         
-        self.mcmc = best_mcmc
-        logger.warning(f"Using best run (acceptance rate: {best_prob:.3f})")
+        else:
+            # Single chain with restarts
+            best_mcmc = None
+            best_prob = -1.0
+            fields = ('accept_prob',) if 'accept_prob' not in extra_fields else extra_fields
+
+            for i in range(max_num_restarts):
+                key = rng_key if i == 0 and rng_key is not None else jra.PRNGKey(i)
+                self.mcmc = MCMC(kernel, num_warmup=num_warmup, num_samples=num_samples,
+                                num_chains=1, progress_bar=progress_bar, jit_model_args=False)
+                
+                self.mcmc.run(key, X, y, priors_sigma, extra_fields=fields)
+                prob = self.mcmc.get_extra_fields()['accept_prob'].mean()
+                
+                if prob > best_prob:
+                    best_mcmc, best_prob = self.mcmc, prob
+                    
+                if prob > min_accept_prob:
+                    break
+                
+                if i < max_num_restarts - 1:
+                    logger.warning(f"MCMC restart {i+1}/{max_num_restarts}: acceptance rate {prob:.3f} below {min_accept_prob}")
+            
+            if prob <= min_accept_prob:  # if we never found an acceptable chain
+                self.mcmc = best_mcmc
+                logger.warning(f"Using best run (acceptance rate: {best_prob:.3f})")
+
+        if run_diagnostics:
+            samples = self.mcmc.get_samples(group_by_chain=True)
+            diagnostics = MCMCDiagnostics()
+            self.diagnostic_results = diagnostics.run_diagnostics(samples)
+
 
     def get_samples(self, chain_dim: bool = False) -> Dict[str, jnp.ndarray]:
         """Get posterior samples (after running the MCMC chains)"""
