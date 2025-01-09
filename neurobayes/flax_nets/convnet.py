@@ -28,6 +28,7 @@ class FlaxConvNet(nn.Module):
     target_dim: int
     activation: str = 'tanh'
     kernel_size: Union[int, Tuple[int, ...]] = 3
+    classification: bool = False  # Explicit flag for classification tasks
 
     @nn.compact
     def __call__(self, x: jnp.ndarray) -> jnp.ndarray:
@@ -51,7 +52,8 @@ class FlaxConvNet(nn.Module):
         x = FlaxMLP(
             hidden_dims=self.fc_layers,
             target_dim=self.target_dim,
-            activation=self.activation)(x)
+            activation=self.activation,
+            classification=self.classification)(x)
 
         return x
     
