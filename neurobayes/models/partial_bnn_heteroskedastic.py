@@ -90,7 +90,7 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
                     input_shape=(1, *current_input.shape[1:]),
                     prior=prior
                 )
-                current_input = net(current_input)
+                current_input = net(current_input, enable_dropout=False)
             else:
                 params = {
                     "params": {
@@ -100,7 +100,7 @@ class HeteroskedasticPartialBNN(HeteroskedasticBNN):
                         }
                     }
                 }
-                current_input = layer.apply(params, current_input)
+                current_input = layer.apply(params, current_input, enable_dropout=False)
 
         # Process head layers
         shared_output = current_input

@@ -54,7 +54,7 @@ class HeteroskedasticBNN(BNN):
             "nn", self.nn, input_shape=(1, *input_shape), prior=prior)
 
         # Pass inputs through a NN with the sampled parameters
-        mu, sig = net(X)
+        mu, sig = net(X, enable_dropout=False)
         # Register values with numpyro
         mu = numpyro.deterministic("mu", mu)
         sig = numpyro.deterministic("sig", sig)

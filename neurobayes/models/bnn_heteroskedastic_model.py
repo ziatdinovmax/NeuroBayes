@@ -36,7 +36,7 @@ class VarianceModelHeteroskedasticBNN(HeteroskedasticBNN):
             prior=(lambda name, shape:  dist.Normal(0, priors_sigma)))
 
         # Pass inputs through a NN with the sampled parameters
-        mu = numpyro.deterministic("mu", net(X))
+        mu = numpyro.deterministic("mu", net(X, enable_dropout=False))
 
         # Sample noise variance according to the provided model
         var_params = self.variance_model_prior()
