@@ -68,14 +68,13 @@ class BNN:
         return self.num_classes is None
 
     def model(self,
-              X: jnp.ndarray,
-              y: jnp.ndarray = None,
-              priors_sigma: float = 1.0,
-              **kwargs) -> None:
-        """Unified BNN model for both regression and classification"""
-
+            X: jnp.ndarray,
+            y: jnp.ndarray = None,
+            priors_sigma: float = 1.0,
+            **kwargs) -> None:
+        
         pretrained_priors = (flatten_params_dict(self.pretrained_priors) 
-                           if self.pretrained_priors is not None else None)
+                             if self.pretrained_priors is not None else None)
         
         def prior(name, shape):
             if pretrained_priors is not None:
@@ -86,17 +85,23 @@ class BNN:
             return dist.Normal(0., priors_sigma)
         
         input_shape = X.shape[1:] if X.ndim > 2 else (X.shape[-1],)
+        
         net = random_flax_module(
-            "nn", self.nn, input_shape=(1, *input_shape), prior=prior)
+            "nn", 
+            self.nn, 
+            input_shape=(1, *input_shape), 
+            prior=prior,
+        )
 
-        if self.is_regression:
-            # Regression case
-            mu = numpyro.deterministic("mu", net(X))
+        if self.is_regression: # Regression case
+            mu = numpyro.deterministic(
+                "mu", 
+                net(X, enable_dropout=False)
+            )
             sig = numpyro.sample("sig", self.noise_prior)
             numpyro.sample("y", dist.Normal(mu, sig), obs=y)
-        else:
-            # Classification case
-            logits = net(X)
+        else: # Classification case
+            logits = net(X, enable_dropout=False)
             probs = numpyro.deterministic("probs", softmax(logits, axis=-1))
             numpyro.sample("y", dist.Categorical(probs=probs), obs=y)
 
@@ -266,7 +271,8 @@ class BNN:
                             ) -> jnp.ndarray:
         """Sample from posterior distribution at new inputs X_new"""
         predictive = Predictive(
-            self.model, samples,
+            self.model,
+            samples,
             return_sites=return_sites
         )
         return predictive(rng_key, X_new)

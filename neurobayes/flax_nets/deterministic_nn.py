@@ -86,7 +86,13 @@ class DeterministicNN:
     @partial(jax.jit, static_argnums=(0,))
     def train_step(self, state, inputs, targets):
         """JIT-compiled training step"""
-        loss, grads = jax.value_and_grad(self.total_loss)(state.params, inputs, targets)
+        dropout_key = jax.random.PRNGKey(state.step)
+        loss, grads = jax.value_and_grad(self.total_loss)(
+            state.params, 
+            inputs, 
+            targets, 
+            rngs={'dropout': dropout_key}
+        )
         state = state.apply_gradients(grads=grads)
         return state, loss
     
@@ -165,36 +171,52 @@ class DeterministicNN:
     def reset_swa(self):
         """Reset SWA collections"""
         self.params_history = []
-
-    def mse_loss(self, params: Dict, inputs: jnp.ndarray,
-                 targets: jnp.ndarray) -> jnp.ndarray:
-        predictions = self.model.apply({'params': params}, inputs)
-        return jnp.mean((predictions - targets) ** 2)
-    
-    def heteroskedastic_loss(self, params: Dict, inputs: jnp.ndarray,
-                            targets: jnp.ndarray) -> jnp.ndarray:
-        y_pred, y_var = self.model.apply({'params': params}, inputs)
-        return jnp.mean(0.5 * jnp.log(y_var) + 0.5 * (targets - y_pred)**2 / y_var)
-    
-    def cross_entropy_loss(self, params: Dict, inputs: jnp.ndarray,
-                        targets: jnp.ndarray) -> jnp.ndarray:
-        logits = self.model.apply({'params': params}, inputs)
-        return -jnp.mean(jnp.sum(targets * jax.nn.log_softmax(logits), axis=-1))
     
     def gaussian_prior(self, params: Dict) -> jnp.ndarray:
         l2_norm = sum(jnp.sum(jnp.square(p)) for p in jax.tree_util.tree_leaves(params))
         return l2_norm / (2 * self.sigma**2)
     
-    def total_loss(self, params: Dict, inputs: jnp.ndarray, targets: jnp.ndarray) -> jnp.ndarray:
+    def total_loss(self, params: Dict, inputs: jnp.ndarray, targets: jnp.ndarray, 
+                rngs: Dict) -> jnp.ndarray:
         if self.loss == 'classification':
-            loss = self.cross_entropy_loss(params, inputs, targets)
+            loss = self.cross_entropy_loss(params, inputs, targets, rngs)
         else:
             loss_fn = self.mse_loss if self.loss == 'homoskedastic' else self.heteroskedastic_loss
-            loss = loss_fn(params, inputs, targets)
+            loss = loss_fn(params, inputs, targets, rngs)
         if self.map:
             prior_loss = self.gaussian_prior(params) / len(inputs)
             loss += prior_loss
         return loss
+
+    def mse_loss(self, params: Dict, inputs: jnp.ndarray,
+                targets: jnp.ndarray, rngs: Dict) -> jnp.ndarray:
+        predictions = self.model.apply(
+            {'params': params}, 
+            inputs, 
+            enable_dropout=True,
+            rngs=rngs
+        )
+        return jnp.mean((predictions - targets) ** 2)
+        
+    def heteroskedastic_loss(self, params: Dict, inputs: jnp.ndarray,
+                            targets: jnp.ndarray, rngs: Dict) -> jnp.ndarray:
+        y_pred, y_var = self.model.apply(
+            {'params': params}, 
+            inputs, 
+            enable_dropout=True,
+            rngs=rngs
+        )
+        return jnp.mean(0.5 * jnp.log(y_var) + 0.5 * (targets - y_pred)**2 / y_var)
+        
+    def cross_entropy_loss(self, params: Dict, inputs: jnp.ndarray,
+                        targets: jnp.ndarray, rngs: Dict) -> jnp.ndarray:
+        logits = self.model.apply(
+            {'params': params}, 
+            inputs, 
+            enable_dropout=True,
+            rngs=rngs
+        )
+        return -jnp.mean(jnp.sum(targets * jax.nn.log_softmax(logits), axis=-1))
 
     def predict(self, X: jnp.ndarray) -> jnp.ndarray:
         X = self.set_data(X)
@@ -202,7 +224,7 @@ class DeterministicNN:
 
     @partial(jax.jit, static_argnums=(0,))
     def _predict(self, state, X):
-        predictions = state.apply_fn({'params': state.params}, X)
+        predictions = state.apply_fn({'params': state.params}, X, enable_dropout=False)
         if self.loss == 'classification':
             return jax.nn.softmax(predictions)
         return predictions

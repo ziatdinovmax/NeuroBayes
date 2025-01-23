@@ -28,6 +28,8 @@ class FlaxConvNet(nn.Module):
     target_dim: int
     activation: str = 'tanh'
     kernel_size: Union[int, Tuple[int, ...]] = 3
+    hidden_dropout: float = 0.0
+    output_dropout: float = 0.0
     classification: bool = False  # Explicit flag for classification tasks
 
     @nn.compact
@@ -53,6 +55,8 @@ class FlaxConvNet(nn.Module):
             hidden_dims=self.fc_layers,
             target_dim=self.target_dim,
             activation=self.activation,
+            hidden_dropout=self.hidden_dropout,
+            output_dropout=self.output_dropout,
             classification=self.classification)(x)
 
         return x
@@ -64,6 +68,8 @@ class FlaxConvNet2Head(nn.Module):
     fc_layers: Sequence[int]
     target_dim: int
     activation: str = 'tanh'
+    hidden_dropout: float = 0.0
+    output_dropout: float = 0.0
     kernel_size: Union[int, Tuple[int, ...]] = 3
 
     @nn.compact
@@ -87,7 +93,9 @@ class FlaxConvNet2Head(nn.Module):
         mean, var = FlaxMLP2Head(
             hidden_dims=self.fc_layers,
             target_dim=self.target_dim,
-            activation=self.activation)(x)
+            activation=self.activation,
+            hidden_dropout=self.hidden_dropout,
+            output_dropout=self.output_dropout)(x)
         
         return mean, var
     

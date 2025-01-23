@@ -63,7 +63,7 @@ class PartialBNN(BNN):
             layer_name = param_path[0]
             param_type = param_path[-1]  # kernel or bias
             return dist.Normal(pretrained_priors[layer_name][param_type], priors_sigma)
-
+        
         current_input = X
 
         # Track when we switch from conv to dense layers
@@ -93,7 +93,7 @@ class PartialBNN(BNN):
                     input_shape=(1, *current_input.shape[1:]),
                     prior=prior
                 )
-                current_input = net(current_input)
+                current_input = net(current_input, enable_dropout=False)
             else:
                 params = {
                     "params": {
@@ -103,7 +103,7 @@ class PartialBNN(BNN):
                         }
                     }
                 }
-                current_input = layer.apply(params, current_input)
+                current_input = layer.apply(params, current_input, enable_dropout=False)
 
         if self.is_regression: # Regression case
             mu = numpyro.deterministic("mu", current_input)
