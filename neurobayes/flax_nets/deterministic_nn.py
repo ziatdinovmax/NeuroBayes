@@ -158,15 +158,31 @@ class DeterministicNN:
         self.params_history.append(params)
 
     def average_params(self) -> Dict:
+        """Average model parameters, excluding normalization layers"""
         if not self.params_history:
             return self.state.params
             
-        # Compute the element-wise average of all stored parameters
-        avg_params = jax.tree_util.tree_map(
-            lambda *param_trees: jnp.mean(jnp.stack(param_trees), axis=0),
-            *self.params_history
+        def should_average(path_tuple):
+            """Check if parameter should be averaged based on its path"""
+            path_str = '/'.join(str(p) for p in path_tuple)
+            skip_patterns = ['LayerNorm', 'BatchNorm', 'embedding/norm']
+            return not any(pattern in path_str for pattern in skip_patterns)
+        
+        def average_leaves(*leaves, path=()):
+            """Average parameters if not in normalization layers"""
+            if should_average(path):
+                return jnp.mean(jnp.stack(leaves), axis=0)
+            else:
+                return leaves[0]  # Keep original parameters
+        
+        # Apply averaging with path information
+        averaged_params = jax.tree_util.tree_map_with_path(
+            lambda path, *values: average_leaves(*values, path=path),
+            self.params_history[0],
+            *self.params_history[1:]
         )
-        return avg_params
+        
+        return averaged_params
 
     def reset_swa(self):
         """Reset SWA collections"""
