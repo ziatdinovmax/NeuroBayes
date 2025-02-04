@@ -50,8 +50,7 @@ class DeterministicNN:
         input_shape = (input_shape,) if isinstance(input_shape, int) else input_shape
         self.model = architecture
 
-        is_transformer = any(base.__name__.lower().find('transformer') >= 0 
-                        for base in architecture.__mro__)
+        is_transformer = 'transformer' in self.model.__class__.__name__.lower()
         input_dtype = jnp.int32 if is_transformer else jnp.float32
         
         if loss not in ['homoskedastic', 'heteroskedastic', 'classification']:
