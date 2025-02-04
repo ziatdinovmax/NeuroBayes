@@ -156,4 +156,4 @@ class FlaxTransformer(nn.Module):
         if self.classification:
             x = nn.softmax(x)
 
-        return x.squeeze(-1)
+        return x#x.squeeze(-1)

@@ -259,7 +259,7 @@ class DeterministicNN:
                 y = y.reshape(-1)
                 y = jax.nn.one_hot(y, num_classes=self.model.target_dim)
             else:
-                y = y[:, None] if y.ndim < 2 else y  # Regression     
+                y = y[:, None] if y.ndim < 2 else y  # Regression 
             return X, y
         return X
 
