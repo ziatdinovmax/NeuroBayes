@@ -49,6 +49,10 @@ class DeterministicNN:
         
         input_shape = (input_shape,) if isinstance(input_shape, int) else input_shape
         self.model = architecture
+
+        is_transformer = any(base.__name__.lower().find('transformer') >= 0 
+                        for base in architecture.__mro__)
+        input_dtype = jnp.int32 if is_transformer else jnp.float32
         
         if loss not in ['homoskedastic', 'heteroskedastic', 'classification']:
             raise ValueError("Select between 'homoskedastic', 'heteroskedastic', or 'classification' loss")
@@ -56,7 +60,10 @@ class DeterministicNN:
         
         # Initialize model
         key = jax.random.PRNGKey(0)
-        params = self.model.init(key, jnp.ones((1, *input_shape)))['params']
+        params = self.model.init(
+            key,
+            jnp.ones((1, *input_shape), dtype=input_dtype)
+        )['params']
         
         # Default SWA configuration with all required parameters
         self.default_swa_config = {
