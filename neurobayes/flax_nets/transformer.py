@@ -17,6 +17,14 @@ class EmbedModule(nn.Module):
         )(x)
     
 
+class LayerNormModule(nn.Module):
+    layer_name: str = 'layernorm'
+    
+    @nn.compact
+    def __call__(self, x):
+        return nn.LayerNorm(name=self.layer_name)(x)
+    
+
 class TransformerAttentionModule(nn.Module):
     num_heads: int
     qkv_features: int
@@ -80,7 +88,9 @@ class TransformerBlock(nn.Module):
 
         # First residual and norm
         x = x + attention
-        x = nn.LayerNorm(name=f"Block{self.block_idx}_LayerNorm1")(x)
+        x = LayerNormModule(
+            layer_name=f"Block{self.block_idx}_LayerNorm1"
+        )(x)
 
         # MLP block
         mlp = TransformerMLPModule(
@@ -94,7 +104,9 @@ class TransformerBlock(nn.Module):
 
         # Second residual and norm
         x = x + mlp
-        x = nn.LayerNorm(name=f"Block{self.block_idx}_LayerNorm2")(x)
+        x = LayerNormModule(
+            layer_name=f"Block{self.block_idx}_LayerNorm2"
+        )(x)
         
         return x
     
@@ -113,21 +125,21 @@ class FlaxTransformer(nn.Module):
 
     @nn.compact
     def __call__(self, x, enable_dropout: bool = True):
-
         # Embedding layers
-        x = nn.Embed(
-            num_embeddings=self.vocab_size,
+        token_embed = EmbedModule(
             features=self.d_model,
-            name="TokenEmbed"
+            num_embeddings=self.vocab_size,
+            layer_name="TokenEmbed"
         )(x)
 
         positions = jnp.arange(x.shape[1])[None, :]
-        position_embedding = nn.Embed(
-            num_embeddings=self.max_seq_length,
+        position_embedding = EmbedModule(
             features=self.d_model,
-            name="PosEmbed"
+            num_embeddings=self.max_seq_length,
+            layer_name="PosEmbed"
         )(positions)
-        x = x + position_embedding
+        
+        x = token_embed + position_embedding
 
         # Transformer blocks
         for i in range(self.num_layers):
@@ -156,4 +168,4 @@ class FlaxTransformer(nn.Module):
         if self.classification:
             x = nn.softmax(x)
 
-        return x#x.squeeze(-1)
+        return x

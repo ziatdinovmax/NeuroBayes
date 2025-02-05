@@ -246,6 +246,41 @@ def flatten_params_dict(params_dict: Dict[str, Any]) -> Dict[str, Any]:
     return flattened
 
 
+def flatten_transformer_params_dict(params_dict):
+    """
+    Properly flatten transformer parameter dictionary to match our layer naming scheme.
+    """
+    flattened = {}
+    params = params_dict
+    
+    # Map EmbedModule_0/1 to TokenEmbed/PosEmbed
+    flattened['TokenEmbed'] = params['EmbedModule_0']['TokenEmbed']
+    flattened['PosEmbed'] = params['EmbedModule_1']['PosEmbed']
+    
+    # Handle transformer blocks
+    for i in range(len([k for k in params.keys() if k.startswith('TransformerBlock')])):
+        block_params = params[f'TransformerBlock_{i}']
+        
+        # LayerNorm parameters are in LayerNormModule_0/1
+        flattened[f'Block{i}_LayerNorm1'] = block_params[f'LayerNormModule_0'][f'Block{i}_LayerNorm1']
+        flattened[f'Block{i}_LayerNorm2'] = block_params[f'LayerNormModule_1'][f'Block{i}_LayerNorm2']
+        
+        # Attention parameters
+        flattened[f'Block{i}_Attention'] = block_params[f'TransformerAttentionModule_0'][f'Block{i}_Attention']
+        
+        # MLP parameters
+        flattened[f'Block{i}_MLP_dense1'] = block_params[f'TransformerMLPModule_0'][f'Block{i}_MLP_dense1']
+        flattened[f'Block{i}_MLP_dense2'] = block_params[f'TransformerMLPModule_0'][f'Block{i}_MLP_dense2']
+    
+    # Final dense layers
+    if 'FinalDense1' in params:
+        flattened['FinalDense1'] = params['FinalDense1']
+    if 'FinalDense2' in params:
+        flattened['FinalDense2'] = params['FinalDense2']
+    
+    return flattened
+
+
 def set_fn(func: Callable) -> Callable:
     """
     Transforms a given deterministic function to use a params dictionary
