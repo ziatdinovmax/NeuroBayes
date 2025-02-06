@@ -49,6 +49,9 @@ class DeterministicNN:
         
         input_shape = (input_shape,) if isinstance(input_shape, int) else input_shape
         self.model = architecture
+
+        is_transformer = 'transformer' in self.model.__class__.__name__.lower()
+        input_dtype = jnp.int32 if is_transformer else jnp.float32
         
         if loss not in ['homoskedastic', 'heteroskedastic', 'classification']:
             raise ValueError("Select between 'homoskedastic', 'heteroskedastic', or 'classification' loss")
@@ -56,7 +59,10 @@ class DeterministicNN:
         
         # Initialize model
         key = jax.random.PRNGKey(0)
-        params = self.model.init(key, jnp.ones((1, *input_shape)))['params']
+        params = self.model.init(
+            key,
+            jnp.ones((1, *input_shape), dtype=input_dtype)
+        )['params']
         
         # Default SWA configuration with all required parameters
         self.default_swa_config = {
@@ -86,7 +92,13 @@ class DeterministicNN:
     @partial(jax.jit, static_argnums=(0,))
     def train_step(self, state, inputs, targets):
         """JIT-compiled training step"""
-        loss, grads = jax.value_and_grad(self.total_loss)(state.params, inputs, targets)
+        dropout_key = jax.random.PRNGKey(state.step)
+        loss, grads = jax.value_and_grad(self.total_loss)(
+            state.params, 
+            inputs, 
+            targets, 
+            rngs={'dropout': dropout_key}
+        )
         state = state.apply_gradients(grads=grads)
         return state, loss
     
@@ -152,49 +164,81 @@ class DeterministicNN:
         self.params_history.append(params)
 
     def average_params(self) -> Dict:
+        """Average model parameters, excluding normalization layers"""
         if not self.params_history:
             return self.state.params
             
-        # Compute the element-wise average of all stored parameters
-        avg_params = jax.tree_util.tree_map(
-            lambda *param_trees: jnp.mean(jnp.stack(param_trees), axis=0),
-            *self.params_history
+        def should_average(path_tuple):
+            """Check if parameter should be averaged based on its path"""
+            path_str = '/'.join(str(p) for p in path_tuple)
+            skip_patterns = ['LayerNorm', 'BatchNorm', 'embedding/norm']
+            return not any(pattern in path_str for pattern in skip_patterns)
+        
+        def average_leaves(*leaves, path=()):
+            """Average parameters if not in normalization layers"""
+            if should_average(path):
+                return jnp.mean(jnp.stack(leaves), axis=0)
+            else:
+                return leaves[0]  # Keep original parameters
+        
+        # Apply averaging with path information
+        averaged_params = jax.tree_util.tree_map_with_path(
+            lambda path, *values: average_leaves(*values, path=path),
+            self.params_history[0],
+            *self.params_history[1:]
         )
-        return avg_params
+        
+        return averaged_params
 
     def reset_swa(self):
         """Reset SWA collections"""
         self.params_history = []
-
-    def mse_loss(self, params: Dict, inputs: jnp.ndarray,
-                 targets: jnp.ndarray) -> jnp.ndarray:
-        predictions = self.model.apply({'params': params}, inputs)
-        return jnp.mean((predictions - targets) ** 2)
-    
-    def heteroskedastic_loss(self, params: Dict, inputs: jnp.ndarray,
-                            targets: jnp.ndarray) -> jnp.ndarray:
-        y_pred, y_var = self.model.apply({'params': params}, inputs)
-        return jnp.mean(0.5 * jnp.log(y_var) + 0.5 * (targets - y_pred)**2 / y_var)
-    
-    def cross_entropy_loss(self, params: Dict, inputs: jnp.ndarray,
-                        targets: jnp.ndarray) -> jnp.ndarray:
-        logits = self.model.apply({'params': params}, inputs)
-        return -jnp.mean(jnp.sum(targets * jax.nn.log_softmax(logits), axis=-1))
     
     def gaussian_prior(self, params: Dict) -> jnp.ndarray:
         l2_norm = sum(jnp.sum(jnp.square(p)) for p in jax.tree_util.tree_leaves(params))
         return l2_norm / (2 * self.sigma**2)
     
-    def total_loss(self, params: Dict, inputs: jnp.ndarray, targets: jnp.ndarray) -> jnp.ndarray:
+    def total_loss(self, params: Dict, inputs: jnp.ndarray, targets: jnp.ndarray, 
+                rngs: Dict) -> jnp.ndarray:
         if self.loss == 'classification':
-            loss = self.cross_entropy_loss(params, inputs, targets)
+            loss = self.cross_entropy_loss(params, inputs, targets, rngs)
         else:
             loss_fn = self.mse_loss if self.loss == 'homoskedastic' else self.heteroskedastic_loss
-            loss = loss_fn(params, inputs, targets)
+            loss = loss_fn(params, inputs, targets, rngs)
         if self.map:
             prior_loss = self.gaussian_prior(params) / len(inputs)
             loss += prior_loss
         return loss
+
+    def mse_loss(self, params: Dict, inputs: jnp.ndarray,
+                targets: jnp.ndarray, rngs: Dict) -> jnp.ndarray:
+        predictions = self.model.apply(
+            {'params': params}, 
+            inputs, 
+            enable_dropout=True,
+            rngs=rngs
+        )
+        return jnp.mean((predictions - targets) ** 2)
+        
+    def heteroskedastic_loss(self, params: Dict, inputs: jnp.ndarray,
+                            targets: jnp.ndarray, rngs: Dict) -> jnp.ndarray:
+        y_pred, y_var = self.model.apply(
+            {'params': params}, 
+            inputs, 
+            enable_dropout=True,
+            rngs=rngs
+        )
+        return jnp.mean(0.5 * jnp.log(y_var) + 0.5 * (targets - y_pred)**2 / y_var)
+        
+    def cross_entropy_loss(self, params: Dict, inputs: jnp.ndarray,
+                        targets: jnp.ndarray, rngs: Dict) -> jnp.ndarray:
+        logits = self.model.apply(
+            {'params': params}, 
+            inputs, 
+            enable_dropout=True,
+            rngs=rngs
+        )
+        return -jnp.mean(jnp.sum(targets * jax.nn.log_softmax(logits), axis=-1))
 
     def predict(self, X: jnp.ndarray) -> jnp.ndarray:
         X = self.set_data(X)
@@ -202,7 +246,7 @@ class DeterministicNN:
 
     @partial(jax.jit, static_argnums=(0,))
     def _predict(self, state, X):
-        predictions = state.apply_fn({'params': state.params}, X)
+        predictions = state.apply_fn({'params': state.params}, X, enable_dropout=False)
         if self.loss == 'classification':
             return jax.nn.softmax(predictions)
         return predictions
@@ -215,7 +259,7 @@ class DeterministicNN:
                 y = y.reshape(-1)
                 y = jax.nn.one_hot(y, num_classes=self.model.target_dim)
             else:
-                y = y[:, None] if y.ndim < 2 else y  # Regression     
+                y = y[:, None] if y.ndim < 2 else y  # Regression 
             return X, y
         return X
 
