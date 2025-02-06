@@ -10,12 +10,12 @@ class EmbedModule(nn.Module):
     
     @nn.compact
     def __call__(self, x):
+        x = x.astype(jnp.int32)
         return nn.Embed(
             num_embeddings=self.num_embeddings,
             features=self.features,
             name=self.layer_name
         )(x)
-    
 
 class LayerNormModule(nn.Module):
     layer_name: str = 'layernorm'
