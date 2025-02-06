@@ -7,7 +7,6 @@ from .models.partial_bnn import PartialBNN
 from .models.bnn_heteroskedastic import HeteroskedasticBNN
 from .models.bnn_heteroskedastic_model import VarianceModelHeteroskedasticBNN
 from .models.partial_bnn_heteroskedastic import HeteroskedasticPartialBNN
-from .models.partial_btnn import PartialBTNN
 from .flax_nets.deterministic_nn import DeterministicNN
 from .flax_nets.convnet import FlaxConvNet, FlaxConvNet2Head, FlaxMLP, FlaxMLP2Head
 

@@ -1,120 +1,72 @@
-from typing import Dict, Optional, Type, Tuple, Union, List
+from typing import Dict, Optional, Type, Union, List, Tuple
 import jax.numpy as jnp
-from jax.nn import softmax
-
-import numpyro
 import numpyro.distributions as dist
-from numpyro.contrib.module import random_flax_module
 
-from .bnn import BNN
-from ..flax_nets import FlaxMLP, FlaxConvNet
-from ..flax_nets import DeterministicNN
-from ..flax_nets import MLPLayerModule, ConvLayerModule, extract_configs
-from ..utils import flatten_params_dict
+from .partial_bnn_mlp import PartialBayesianMLP
+from .partial_bnn_conv import PartialBayesianConvNet
+from .partial_bnn_transformer import PartialBayesianTransformer
+from ..flax_nets import FlaxMLP, FlaxConvNet, FlaxTransformer
 
-class PartialBNN(BNN):
+class PartialBNN:
     """
-    Partially stochastic (Bayesian) neural network
+    A unified wrapper for partially Bayesian neural networks that supports MLPs, 
+    ConvNets, and Transformers with a consistent API.
 
     Args:
-        deterministic_nn:
-            Neural network architecture (MLP, ConvNet, or other supported types)
-        deterministic_weights:
-            Pre-trained deterministic weights, If not provided,
-            the deterministic_nn will be trained from scratch when running .fit() method
-        num_probabilistic_layers
-            Number of layers at the end of deterministic_nn to be treated as fully stochastic ('Bayesian')
-        probabilistic_layer_names:
-            Names of neural network modules to be treated probabilistically
+        architecture: Neural network architecture (FlaxMLP, FlaxConvNet, or FlaxTransformer)
+        deterministic_weights: Pre-trained deterministic weights. If not provided,
+            the network will be trained from scratch when running .fit() method
+        num_probabilistic_layers: Number of layers at the end to be treated as fully stochastic
+        probabilistic_layer_names: Names of neural network modules to be treated probabilistically
         num_classes: Number of classes for classification task.
             If None, the model performs regression. Defaults to None.
-        noise_prior:
-            Custom prior for observational noise distribution
+        noise_prior: Custom prior for observational noise distribution
     """
-
     def __init__(self,
-                 deterministic_nn: Union[Type[FlaxMLP], Type[FlaxConvNet]],
+                 architecture: Union[Type[FlaxMLP], Type[FlaxConvNet], Type[FlaxTransformer]],
                  deterministic_weights: Optional[Dict[str, jnp.ndarray]] = None,
-                 num_probabilistic_layers: int = None,
-                 probabilistic_layer_names: List[str] = None,
+                 num_probabilistic_layers: Optional[int] = None,
+                 probabilistic_layer_names: Optional[List[str]] = None,
                  num_classes: Optional[int] = None,
                  noise_prior: Optional[dist.Distribution] = None
                  ) -> None:
-        super().__init__(None, num_classes, noise_prior)
         
-        self.deterministic_nn = deterministic_nn
-        self.deterministic_weights = deterministic_weights
-
-        self.layer_configs = extract_configs(
-            deterministic_nn, probabilistic_layer_names, num_probabilistic_layers)
-    
-    def model(self,
-          X: jnp.ndarray,
-          y: jnp.ndarray = None,
-          priors_sigma: float = 1.0,
-          **kwargs) -> None:
-        """Partial BNN model"""
-    
-        net = self.deterministic_nn
-        pretrained_priors = flatten_params_dict(self.deterministic_weights)
+        self.architecture = architecture
         
-        def prior(name, shape):
-            param_path = name.split('.')
-            layer_name = param_path[0]
-            param_type = param_path[-1]  # kernel or bias
-            return dist.Normal(pretrained_priors[layer_name][param_type], priors_sigma)
+        arch_class = architecture if isinstance(architecture, type) else architecture.__class__
         
-        current_input = X
-
-        # Track when we switch from conv to dense layers
-        last_conv_idx = max(
-            (i for i, c in enumerate(self.layer_configs) if c["layer_type"] == "conv"),
-            default=-1
-        )
-        
-        for idx, config in enumerate(self.layer_configs):
-            layer_name = config['layer_name']
-
-            # Flatten inputs after last conv layer
-            if idx > last_conv_idx and idx-1 == last_conv_idx:
-                current_input = current_input.reshape((current_input.shape[0], -1))
-
-            layer_cls = ConvLayerModule if config["layer_type"] == "conv" else MLPLayerModule
-            layer = layer_cls(
-                features=config['features'],
-                activation=config['activation'],
-                layer_name=layer_name,
-                **({"input_dim": config['input_dim'], 
-                    "kernel_size": config['kernel_size']} if config["layer_type"] == "conv" else {})
+        if issubclass(arch_class, FlaxTransformer):
+            self._model = PartialBayesianTransformer(
+                transformer=architecture,
+                deterministic_weights=deterministic_weights,
+                num_probabilistic_layers=num_probabilistic_layers,
+                probabilistic_layer_names=probabilistic_layer_names,
+                num_classes=num_classes,
+                noise_prior=noise_prior
             )
-            if config['is_probabilistic']:
-                net = random_flax_module(
-                    layer_name, layer, 
-                    input_shape=(1, *current_input.shape[1:]),
-                    prior=prior
-                )
-                current_input = net(current_input, enable_dropout=False)
-            else:
-                params = {
-                    "params": {
-                        layer_name: {
-                            "kernel": pretrained_priors[layer_name]["kernel"],
-                            "bias": pretrained_priors[layer_name]["bias"]
-                        }
-                    }
-                }
-                current_input = layer.apply(params, current_input, enable_dropout=False)
-
-        if self.is_regression: # Regression case
-            mu = numpyro.deterministic("mu", current_input)
-            sig = numpyro.sample("sig", self.noise_prior)
-            numpyro.sample("y", dist.Normal(mu, sig), obs=y)
-        else: # Classification case
-            # Note: Even if the original deterministic_nn had softmax,
-            # it was overridden to None in extract_mlp_configs, so we  
-            # need to apply softmax here
-            probs = numpyro.deterministic("probs", softmax(current_input, axis=-1))
-            numpyro.sample("y", dist.Categorical(probs=probs), obs=y)
+        elif issubclass(arch_class, FlaxMLP):
+            self._model = PartialBayesianMLP(
+                mlp=architecture,
+                deterministic_weights=deterministic_weights,
+                num_probabilistic_layers=num_probabilistic_layers,
+                probabilistic_layer_names=probabilistic_layer_names,
+                num_classes=num_classes,
+                noise_prior=noise_prior
+            )
+        elif issubclass(arch_class, FlaxConvNet):
+            self._model = PartialBayesianConvNet(
+                convnet=architecture,
+                deterministic_weights=deterministic_weights,
+                num_probabilistic_layers=num_probabilistic_layers,
+                probabilistic_layer_names=probabilistic_layer_names,
+                num_classes=num_classes,
+                noise_prior=noise_prior
+            )
+        else:
+            raise ValueError(
+                f"Unsupported architecture type: {arch_class}. "
+                "Must be one of: FlaxMLP, FlaxConvNet, or FlaxTransformer"
+            )
 
     def fit(self, X: jnp.ndarray, y: jnp.ndarray,
             num_warmup: int = 2000, num_samples: int = 2000,
@@ -125,57 +77,109 @@ class PartialBNN(BNN):
             progress_bar: bool = True, device: str = None,
             rng_key: Optional[jnp.array] = None,
             extra_fields: Optional[Tuple[str, ...]] = (),
-            **kwargs
+            max_num_restarts: int = 1,
+            min_accept_prob: float = 0.55,
+            run_diagnostics: bool = False
             ) -> None:
         """
-        Infer parameters of the partial BNN
-
+        Fit the partially Bayesian neural network.
+        
         Args:
-            X (jnp.ndarray): Input features. For MLP: 2D array of shape (n_samples, n_features).
-                For ConvNet: N-D array of shape (n_samples, *dims, n_channels), where
-                dims = (length,) for spectral data or (height, width) for image data.
-            y (jnp.ndarray): Target array. For single-output problems: 1D array of shape (n_samples,).
-                For multi-output problems: 2D array of shape (n_samples, target_dim).
-            num_warmup (int, optional): Number of NUTS warmup steps. Defaults to 2000.
-            num_samples (int, optional): Number of NUTS samples to draw. Defaults to 2000.
-            num_chains (int, optional): Number of NUTS chains to run. Defaults to 1.
-            chain_method (str, optional): Method for running chains: 'sequential', 'parallel', 
+            X: Input data
+                - For MLP: 2D array (n_samples, n_features)
+                - For ConvNet: ND array (n_samples, *dims, n_channels)
+                - For Transformer: 2D array (n_samples, seq_length)
+            y: Target values
+                - For regression: 1D array (n_samples,) or 2D array (n_samples, target_dim)
+                - For classification: 1D array (n_samples,) with class labels
+            num_warmup: Number of NUTS warmup steps. Defaults to 2000.
+            num_samples: Number of NUTS samples to draw. Defaults to 2000.
+            num_chains: Number of NUTS chains to run. Defaults to 1.
+            chain_method: Method for running chains: 'sequential', 'parallel', 
                 or 'vectorized'. Defaults to 'sequential'.
-            sgd_epochs (Optional[int], optional): Number of SGD training epochs for deterministic NN.
+            sgd_epochs: Number of SGD training epochs for deterministic NN.
                 Defaults to 500 (if no pretrained weights are provided).
-            sgd_lr (float, optional): SGD learning rate. Defaults to 0.01.
-            sgd_batch_size (Optional[int], optional): Mini-batch size for SGD training. 
+            sgd_lr: SGD learning rate. Defaults to 0.01.
+            sgd_batch_size: Mini-batch size for SGD training. 
                 Defaults to None (all input data is processed as a single batch).
-            swa_config (dict, optional):
-                Stochastic weight averaging protocol. Defaults to averaging weights
+            swa_config: Stochastic weight averaging protocol. Defaults to averaging weights
                 at the end of training trajectory (the last 5% of SGD epochs).
-            map_sigma (float, optional): Sigma in Gaussian prior for regularized SGD training. Defaults to 1.0.
-            priors_sigma (float, optional): Standard deviation for default or pretrained priors
+            map_sigma: Sigma in Gaussian prior for regularized SGD training. Defaults to 1.0.
+            priors_sigma: Standard deviation for default or pretrained priors
                 in the Bayesian part of the NN. Defaults to 1.0.
-            progress_bar (bool, optional): Show progress bar. Defaults to True.
-            device (Optional[str], optional): The device to perform computation on ('cpu', 'gpu'). 
+            progress_bar: Show progress bar. Defaults to True.
+            device: The device to perform computation on ('cpu', 'gpu'). 
                 Defaults to None (JAX default device).
-            rng_key (Optional[jnp.ndarray], optional): Random number generator key. Defaults to None.
-            extra_fields (Optional[Tuple[str, ...]], optional): Extra fields to collect during the MCMC run. 
+            rng_key: Random number generator key. Defaults to None.
+            extra_fields: Extra fields to collect during the MCMC run. 
                 Defaults to ().
-            **max_num_restarts (int, optional): Maximum number of fitting attempts for single chain. 
+            max_num_restarts: Maximum number of fitting attempts for single chain. 
                 Ignored if num_chains > 1. Defaults to 1.
-            **min_accept_prob (float, optional): Minimum acceptance probability threshold. 
+            min_accept_prob: Minimum acceptance probability threshold. 
                 Only used if num_chains = 1. Defaults to 0.55.
-            **run_diagnostics (bool, optional): Run Gelman-Rubin diagnostics layer-by-layer at the end.
+            run_diagnostics: Run Gelman-Rubin diagnostics layer-by-layer at the end.
                 Defaults to False.
         """
-        if not self.deterministic_weights:
-            print("Training deterministic NN...")
-            X, y = self.set_data(X, y)
-            det_nn = DeterministicNN(
-                self.deterministic_nn,
-                input_shape = X.shape[1:] if X.ndim > 2 else (X.shape[-1],), # different input shape for ConvNet and MLP
-                loss='homoskedastic' if self.is_regression else 'classification',
-                learning_rate=sgd_lr, swa_config=swa_config, sigma=map_sigma)
-            det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs, sgd_batch_size)
-            self.deterministic_weights = det_nn.state.params
-            print("Training partially Bayesian NN")
-        super().fit(
-            X, y, num_warmup, num_samples, num_chains, chain_method,
-            priors_sigma, progress_bar, device, rng_key, extra_fields, **kwargs)
+        return self._model.fit(
+            X, y,
+            num_warmup=num_warmup,
+            num_samples=num_samples,
+            num_chains=num_chains,
+            chain_method=chain_method,
+            sgd_epochs=sgd_epochs,
+            sgd_lr=sgd_lr,
+            sgd_batch_size=sgd_batch_size,
+            swa_config=swa_config,
+            map_sigma=map_sigma,
+            priors_sigma=priors_sigma,
+            progress_bar=progress_bar,
+            device=device,
+            rng_key=rng_key,
+            extra_fields=extra_fields,
+            max_num_restarts=max_num_restarts,
+            min_accept_prob=min_accept_prob,
+            run_diagnostics=run_diagnostics
+        )
+
+    def predict(self, X: jnp.ndarray) -> jnp.ndarray:
+        """Make predictions using the fitted model."""
+        return self._model.predict(X)
+    
+    def get_samples(self, chain_dim: bool = False) -> Dict[str, jnp.ndarray]:
+        """Get posterior samples (after running the MCMC chains)"""
+        return self._model.get_samples(chain_dim)
+    
+    def predict_classes(self, X_new: jnp.ndarray,
+                       samples: Optional[Dict[str, jnp.ndarray]] = None,
+                       device: Optional[str] = None,
+                       rng_key: Optional[jnp.ndarray] = None) -> jnp.ndarray:
+        """Predict class labels for classification tasks"""
+        return self._model.predict_classes(X_new, samples, device, rng_key)
+    
+    def sample_from_posterior(self,
+                            rng_key: jnp.ndarray,
+                            X_new: jnp.ndarray,
+                            samples: Dict[str, jnp.ndarray],
+                            return_sites: Optional[List[str]] = None) -> jnp.ndarray:
+        """Sample from posterior distribution at new inputs X_new"""
+        return self._model.sample_from_posterior(rng_key, X_new, samples, return_sites)
+    
+    def set_data(self, X: jnp.ndarray, y: Optional[jnp.ndarray] = None
+             ) -> Union[Tuple[jnp.ndarray], jnp.ndarray]:
+        """Prepare data for model fitting or prediction"""
+        return self._model.set_data(X, y)
+    
+    @property
+    def is_regression(self) -> bool:
+        """Check if the model is performing regression"""
+        return self._model.is_regression
+    
+    @property
+    def mcmc(self):
+        """Get the MCMC sampler"""
+        return self._model.mcmc
+    
+    @property
+    def diagnostic_results(self):
+        """Get diagnostic results if run_diagnostics was True during fitting"""
+        return self._model.diagnostic_results

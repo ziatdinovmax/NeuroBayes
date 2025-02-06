@@ -9,11 +9,11 @@ from numpyro.contrib.module import random_flax_module
 from .bnn import BNN
 from ..flax_nets import FlaxTransformer, DeterministicNN
 from ..flax_nets import MLPLayerModule, TransformerAttentionModule, EmbedModule, LayerNormModule
-from ..flax_nets import extract_transformer_configs
+from ..flax_nets import extract_configs
 from ..utils import flatten_transformer_params_dict
 
 
-class PartialBTNN(BNN):
+class PartialBayesianTransformer(BNN):
     """
     Partially stochastic (Bayesian) Transformer network.
 
@@ -45,7 +45,7 @@ class PartialBTNN(BNN):
         self.deterministic_weights = deterministic_weights
         
         # Extract configurations
-        self.layer_configs = extract_transformer_configs(
+        self.layer_configs = extract_configs(
             transformer, probabilistic_layer_names, num_probabilistic_layers)
     
     def model(self, X: jnp.ndarray, y: jnp.ndarray = None, priors_sigma: float = 1.0, **kwargs) -> None:
