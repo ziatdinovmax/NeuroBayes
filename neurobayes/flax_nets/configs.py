@@ -325,7 +325,6 @@ def extract_transformer_configs(
     
     # For each transformer block
     for i in range(transformer.num_layers):
-        # Attention config - note modified layer name to match TransformerAttentionModule
         configs.append({
             "num_heads": transformer.nhead,
             "qkv_features": transformer.d_model,
@@ -335,14 +334,12 @@ def extract_transformer_configs(
             "layer_name": f"Block{i}_Attention"
         })
         
-        # Layer norm 1 config - stays the same
         configs.append({
             "is_probabilistic": f"Block{i}_LayerNorm1" in (probabilistic_layers or []),
             "layer_type": "layernorm",
             "layer_name": f"Block{i}_LayerNorm1"
         })
         
-        # MLP configs - note modified layer names to match TransformerMLPModule
         configs.append({
             "features": transformer.dim_feedforward,
             "activation": activation_fn,
@@ -359,7 +356,6 @@ def extract_transformer_configs(
             "layer_name": f"Block{i}_MLP_dense2"
         })
         
-        # Layer norm 2 config - stays the same
         configs.append({
             "is_probabilistic": f"Block{i}_LayerNorm2" in (probabilistic_layers or []),
             "layer_type": "layernorm",
