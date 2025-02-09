@@ -70,7 +70,6 @@ class PartialBayesianMLP(BNN):
             if config['is_probabilistic']:
                 current_input = partial_bayesian_dense(
                     current_input,
-                    features=config['features'],
                     pretrained_kernel=pretrained_priors[layer_name]["kernel"],
                     pretrained_bias=pretrained_priors[layer_name]["bias"],
                     prob_neurons=config.get('probabilistic_neurons'),
