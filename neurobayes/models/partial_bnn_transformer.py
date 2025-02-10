@@ -98,7 +98,7 @@ class PartialBayesianTransformer(BNN):
                     # Get probabilistic indices from config if specified
                     prob_indices = config.get('probabilistic_neurons', None)
                     if prob_indices is not None:
-                        # Use partial Bayesian embedding only when specific indices are provided
+                        # Use custom partial Bayesian implementation for neuron-level control
                         embedding = partial_bayesian_embed(
                             input_data,
                             pretrained_embedding=pretrained_priors[layer_name]['embedding'],
@@ -165,9 +165,23 @@ class PartialBayesianTransformer(BNN):
                     layer_name=layer_name
                 )
                 if config['is_probabilistic']:
-                    net = random_flax_module(layer_name, layer,
-                                        input_shape=(1, *current_input.shape[1:]), prior=prior)
-                    current_input = net(current_input, enable_dropout=False)
+                    prob_neurons = config.get('probabilistic_neurons')
+                    if prob_neurons is not None:
+                        # Use custom partial Bayesian implementation for neuron-level control
+                        current_input = partial_bayesian_dense(
+                            current_input,
+                            pretrained_kernel=pretrained_priors[layer_name]['kernel'],
+                            pretrained_bias=pretrained_priors[layer_name]['bias'],
+                            prob_neurons=prob_neurons,
+                            priors_sigma=priors_sigma,
+                            layer_name=layer_name,
+                            activation=config.get('activation')
+                        )
+                    else:
+                        # Use random_flax_module when making the entire layer Bayesian
+                        net = random_flax_module(layer_name, layer,
+                                            input_shape=(1, *current_input.shape[1:]), prior=prior)
+                        current_input = net(current_input, enable_dropout=False)
                 else:
                     if layer_name.startswith('Block'):
                         block_idx = int(layer_name.split('_')[0][5:])
@@ -234,7 +248,6 @@ class PartialBayesianTransformer(BNN):
         )
 
 
-
 def partial_bayesian_embed(x, pretrained_embedding, prob_indices, 
                           priors_sigma, layer_name, dtype=None):
     """
@@ -283,3 +296,48 @@ def partial_bayesian_embed(x, pretrained_embedding, prob_indices,
     
     # Use take for proper indexing behavior (matching Flax)
     return jnp.take(embedding_matrix, x, axis=0)
+
+
+def partial_bayesian_dense(x, pretrained_kernel, pretrained_bias, prob_neurons, 
+                          priors_sigma, layer_name, activation=None):
+    """
+    A dense layer function where only specified neurons are Bayesian.
+    """
+    if prob_neurons is not None:
+        # Convert to array for indexing
+        prob_neurons = jnp.array(prob_neurons)
+        
+        # Start with pretrained parameters
+        kernel = pretrained_kernel
+        bias = pretrained_bias
+        
+        # Sample parameters for the Bayesian neurons
+        kernel_prob = numpyro.sample(
+            f"{layer_name}_kernel_prob",
+            dist.Normal(kernel[:, prob_neurons], priors_sigma).to_event(2)
+        )
+        bias_prob = numpyro.sample(
+            f"{layer_name}_bias_prob",
+            dist.Normal(bias[prob_neurons], priors_sigma).to_event(1)
+        )
+        
+        # Update the parameters
+        kernel = kernel.at[:, prob_neurons].set(kernel_prob)
+        bias = bias.at[prob_neurons].set(bias_prob)
+    else:
+        # Full Bayesian layer
+        kernel = numpyro.sample(
+            f"{layer_name}_kernel",
+            dist.Normal(pretrained_kernel, priors_sigma).to_event(2)
+        )
+        bias = numpyro.sample(
+            f"{layer_name}_bias",
+            dist.Normal(pretrained_bias, priors_sigma).to_event(1)
+        )
+    
+    # Compute output
+    y = jnp.dot(x, kernel) + bias
+    if activation is not None:
+        y = activation(y)
+    
+    return y
