@@ -36,6 +36,7 @@ class PartialBayesianTransformer(BNN):
                  deterministic_weights: Optional[Dict[str, jnp.ndarray]] = None,
                  probabilistic_layer_names: List[str] = None,
                  num_probabilistic_layers: int = None,
+                 probabilistic_neurons: Optional[Dict[str, List[int]]] = None,
                  num_classes: Optional[int] = None,
                  noise_prior: Optional[dist.Distribution] = None
                  ) -> None:
@@ -47,8 +48,20 @@ class PartialBayesianTransformer(BNN):
         # Extract configurations
         self.layer_configs = extract_configs(
             transformer, probabilistic_layer_names, num_probabilistic_layers)
+        
+        # For each layer, if a subset of neurons is specified, add that to the config.
+        if probabilistic_neurons is not None:
+            for config in self.layer_configs:
+                layer_name = config['layer_name']
+                if layer_name in probabilistic_neurons:
+                    config['probabilistic_neurons'] = probabilistic_neurons[layer_name]
+                else:
+                    config['probabilistic_neurons'] = None
+        else:
+            for config in self.layer_configs:
+                config['probabilistic_neurons'] = None
     
-    def model(self, X: jnp.ndarray, y: jnp.ndarray = None, priors_sigma: float = 1.0, **kwargs) -> None:
+    def model(self, X, y=None, priors_sigma=1.0, **kwargs):
         net = self.deterministic_nn
         pretrained_priors = flatten_transformer_params_dict(self.deterministic_weights)
         
@@ -68,7 +81,7 @@ class PartialBayesianTransformer(BNN):
         positions = jnp.arange(X.shape[1])[None, :]
         token_embedding = None
         pos_embedding = None
-            
+        
         for config in self.layer_configs:
             layer_name = config['layer_name']
             layer_type = config['layer_type']
@@ -82,10 +95,28 @@ class PartialBayesianTransformer(BNN):
                 input_data = positions if layer_name == 'PosEmbed' else current_input
                 
                 if config['is_probabilistic']:
-                    net = random_flax_module(layer_name, layer, 
-                                        input_shape=(1, *input_data.shape[1:]), prior=prior)
-                    embedding = net(input_data)
+                    # Get probabilistic indices from config if specified
+                    prob_indices = config.get('probabilistic_indices', None)
+                    if prob_indices is not None:
+                        # Use partial Bayesian embedding only when specific indices are provided
+                        embedding = partial_bayesian_embed(
+                            input_data,
+                            pretrained_embedding=pretrained_priors[layer_name]['embedding'],
+                            prob_indices=prob_indices,
+                            priors_sigma=priors_sigma,
+                            layer_name=layer_name
+                        )
+                    else:
+                        # Use random_flax_module when making the entire layer Bayesian
+                        net = random_flax_module(
+                            layer_name, 
+                            layer,
+                            input_shape=(1, *input_data.shape[1:]),
+                            prior=prior
+                        )
+                        embedding = net(input_data)
                 else:
+                    # Use deterministic embedding
                     params = {"params": {layer_name: pretrained_priors[layer_name]}}
                     embedding = layer.apply(params, input_data)
                 
@@ -201,3 +232,67 @@ class PartialBayesianTransformer(BNN):
             X, y, num_warmup, num_samples, num_chains, chain_method,
             priors_sigma, progress_bar, device, rng_key, extra_fields, **kwargs
         )
+
+
+
+def partial_bayesian_embed(x, pretrained_embedding, prob_indices, 
+                          priors_sigma, layer_name, dtype=None):
+    """
+    A partial Bayesian embedding layer that matches Flax's Embed functionality.
+    
+    Args:
+        x: Input data, all dimensions are considered batch dimensions.
+           Values must be integers.
+        pretrained_embedding: Pretrained embedding matrix of shape (num_embeddings, features)
+        prob_indices: Indices of embeddings to be treated as Bayesian
+        priors_sigma: Standard deviation for the prior distribution
+        layer_name: Name of the layer for parameter tracking
+        dtype: Optional dtype for the output (default: same as embedding)
+    
+    Returns:
+        Output which is embedded input data with the same shape as input plus
+        an additional features dimension appended.
+    """
+    # Type checking
+    if not jnp.issubdtype(x.dtype, jnp.integer):
+        raise ValueError('Input type must be an integer or unsigned integer.')
+    
+    num_embeddings, features = pretrained_embedding.shape
+    
+    # Handle special case when num_embeddings = 1
+    if num_embeddings == 1:
+        if prob_indices and 0 in prob_indices:
+            # Sample the single embedding vector
+            embedding_matrix = numpyro.sample(
+                f"{layer_name}_embedding",
+                dist.Normal(pretrained_embedding, priors_sigma).to_event(2)
+            )
+        else:
+            embedding_matrix = pretrained_embedding
+            
+        # Match Flax's behavior for num_embeddings = 1
+        return jnp.where(
+            jnp.broadcast_to(x[..., None], x.shape + (features,)) == 0,
+            embedding_matrix,
+            jnp.nan
+        )
+    
+    # Regular case: num_embeddings > 1
+    # Start with pretrained embedding matrix
+    embedding_matrix = pretrained_embedding
+    
+    if prob_indices:
+        # Convert indices to array for proper indexing
+        prob_indices = jnp.array(prob_indices)
+        
+        # Sample parameters only for the Bayesian embedding vectors
+        embeddings_prob = numpyro.sample(
+            f"{layer_name}_embedding_prob",
+            dist.Normal(embedding_matrix[prob_indices], priors_sigma).to_event(2)
+        )
+        
+        # Update only the probabilistic embeddings
+        embedding_matrix = embedding_matrix.at[prob_indices].set(embeddings_prob)
+    
+    # Use take for proper indexing behavior (matching Flax)
+    return jnp.take(embedding_matrix, x, axis=0)
