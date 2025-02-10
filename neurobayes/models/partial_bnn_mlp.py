@@ -58,9 +58,16 @@ class PartialBayesianMLP(BNN):
             for config in self.layer_configs:
                 config['probabilistic_neurons'] = None
 
-    def model(self, X, y=None, priors_sigma=1.0, **kwargs):
-        net = self.deterministic_nn
+    def model(self, X: jnp.ndarray, y: jnp.ndarray = None, priors_sigma: float = 1.0, **kwargs) -> None:
+        """MLP model with partial Bayesian inference"""
+
         pretrained_priors = flatten_params_dict(self.deterministic_weights)
+        
+        def prior(name, shape):
+            param_path = name.split('.')
+            layer_name = param_path[0]
+            param_type = param_path[-1]  # kernel or bias
+            return dist.Normal(pretrained_priors[layer_name][param_type], priors_sigma)
         
         current_input = X
         
@@ -68,23 +75,48 @@ class PartialBayesianMLP(BNN):
             layer_name = config['layer_name']
             
             if config['is_probabilistic']:
-                current_input = partial_bayesian_dense(
-                    current_input,
-                    pretrained_kernel=pretrained_priors[layer_name]["kernel"],
-                    pretrained_bias=pretrained_priors[layer_name]["bias"],
-                    prob_neurons=config.get('probabilistic_neurons'),
-                    priors_sigma=priors_sigma,
-                    layer_name=layer_name,
-                    activation=config['activation']
-                )
+                if config['probabilistic_neurons'] is not None:
+                    # Use custom partial Bayesian implementation for neuron-level control
+                    current_input = partial_bayesian_dense(
+                        current_input,
+                        pretrained_kernel=pretrained_priors[layer_name]["kernel"],
+                        pretrained_bias=pretrained_priors[layer_name]["bias"],
+                        prob_neurons=config['probabilistic_neurons'],
+                        priors_sigma=priors_sigma,
+                        layer_name=layer_name,
+                        activation=config['activation']
+                    )
+                else:
+                    # Use standard random_flax_module for full layer Bayesian treatment
+                    layer = MLPLayerModule(
+                        features=config['features'],
+                        activation=config['activation'],
+                        layer_name=layer_name
+                    )
+                    net = random_flax_module(
+                        layer_name, layer, 
+                        input_shape=(1, *current_input.shape[1:]),
+                        prior=prior
+                    )
+                    current_input = net(current_input, enable_dropout=False)
             else:
                 # Deterministic layer
-                kernel = pretrained_priors[layer_name]["kernel"]
-                bias = pretrained_priors[layer_name]["bias"]
-                current_input = jnp.dot(current_input, kernel) + bias
-                if config['activation'] is not None:
-                    current_input = config['activation'](current_input)
+                params = {
+                    "params": {
+                        layer_name: {
+                            "kernel": pretrained_priors[layer_name]["kernel"],
+                            "bias": pretrained_priors[layer_name]["bias"]
+                        }
+                    }
+                }
+                layer = MLPLayerModule(
+                    features=config['features'],
+                    activation=config['activation'],
+                    layer_name=layer_name
+                )
+                current_input = layer.apply(params, current_input, enable_dropout=False)
 
+        # Rest of the model implementation remains the same
         if self.is_regression:
             mu = numpyro.deterministic("mu", current_input)
             sig = numpyro.sample("sig", self.noise_prior)
