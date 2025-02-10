@@ -96,7 +96,7 @@ class PartialBayesianTransformer(BNN):
                 
                 if config['is_probabilistic']:
                     # Get probabilistic indices from config if specified
-                    prob_indices = config.get('probabilistic_indices', None)
+                    prob_indices = config.get('probabilistic_neurons', None)
                     if prob_indices is not None:
                         # Use partial Bayesian embedding only when specific indices are provided
                         embedding = partial_bayesian_embed(
@@ -239,19 +239,6 @@ def partial_bayesian_embed(x, pretrained_embedding, prob_indices,
                           priors_sigma, layer_name, dtype=None):
     """
     A partial Bayesian embedding layer that matches Flax's Embed functionality.
-    
-    Args:
-        x: Input data, all dimensions are considered batch dimensions.
-           Values must be integers.
-        pretrained_embedding: Pretrained embedding matrix of shape (num_embeddings, features)
-        prob_indices: Indices of embeddings to be treated as Bayesian
-        priors_sigma: Standard deviation for the prior distribution
-        layer_name: Name of the layer for parameter tracking
-        dtype: Optional dtype for the output (default: same as embedding)
-    
-    Returns:
-        Output which is embedded input data with the same shape as input plus
-        an additional features dimension appended.
     """
     # Type checking
     if not jnp.issubdtype(x.dtype, jnp.integer):
@@ -261,7 +248,7 @@ def partial_bayesian_embed(x, pretrained_embedding, prob_indices,
     
     # Handle special case when num_embeddings = 1
     if num_embeddings == 1:
-        if prob_indices and 0 in prob_indices:
+        if prob_indices is not None and len(prob_indices) > 0 and 0 in prob_indices:
             # Sample the single embedding vector
             embedding_matrix = numpyro.sample(
                 f"{layer_name}_embedding",
@@ -281,7 +268,7 @@ def partial_bayesian_embed(x, pretrained_embedding, prob_indices,
     # Start with pretrained embedding matrix
     embedding_matrix = pretrained_embedding
     
-    if prob_indices:
+    if prob_indices is not None and len(prob_indices) > 0:
         # Convert indices to array for proper indexing
         prob_indices = jnp.array(prob_indices)
         
