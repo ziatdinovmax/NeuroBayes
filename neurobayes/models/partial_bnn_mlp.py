@@ -9,6 +9,7 @@ import numpyro.distributions as dist
 from numpyro.contrib.module import random_flax_module
 
 from .bnn import BNN
+from .hybrid_layers import partial_bayesian_dense
 from ..flax_nets import FlaxMLP, DeterministicNN
 from ..flax_nets import MLPLayerModule
 from ..flax_nets import extract_configs
@@ -188,49 +189,3 @@ class PartialBayesianMLP(BNN):
         super().fit(
             X, y, num_warmup, num_samples, num_chains, chain_method,
             priors_sigma, progress_bar, device, rng_key, extra_fields, **kwargs)
-
-
-
-def partial_bayesian_dense(x, pretrained_kernel, pretrained_bias, prob_neurons, 
-                          priors_sigma, layer_name, activation=None):
-    """
-    A dense layer function where only specified neurons are Bayesian.
-    """
-    if prob_neurons is not None:
-        # Convert to array for indexing
-        prob_neurons = jnp.array(prob_neurons)
-        
-        # Start with pretrained parameters
-        kernel = pretrained_kernel
-        bias = pretrained_bias
-        
-        # Sample parameters for the Bayesian neurons
-        kernel_prob = numpyro.sample(
-            f"{layer_name}_kernel_prob",
-            dist.Normal(kernel[:, prob_neurons], priors_sigma).to_event(2)
-        )
-        bias_prob = numpyro.sample(
-            f"{layer_name}_bias_prob",
-            dist.Normal(bias[prob_neurons], priors_sigma).to_event(1)
-        )
-        
-        # Update the parameters
-        kernel = kernel.at[:, prob_neurons].set(kernel_prob)
-        bias = bias.at[prob_neurons].set(bias_prob)
-    else:
-        # Full Bayesian layer
-        kernel = numpyro.sample(
-            f"{layer_name}_kernel",
-            dist.Normal(pretrained_kernel, priors_sigma).to_event(2)
-        )
-        bias = numpyro.sample(
-            f"{layer_name}_bias",
-            dist.Normal(pretrained_bias, priors_sigma).to_event(1)
-        )
-    
-    # Compute output
-    y = jnp.dot(x, kernel) + bias
-    if activation is not None:
-        y = activation(y)
-    
-    return y
