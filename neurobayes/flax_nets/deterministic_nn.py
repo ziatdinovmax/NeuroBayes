@@ -45,7 +45,8 @@ class DeterministicNN:
                  learning_rate: float = 0.01,
                  map: bool = True,
                  sigma: float = 1.0,
-                 swa_config: Optional[Dict] = None) -> None:
+                 swa_config: Optional[Dict] = None,
+                 collect_gradients_epochs: int = 0) -> None:
         
         input_shape = (input_shape,) if isinstance(input_shape, int) else input_shape
         self.model = architecture
@@ -86,8 +87,10 @@ class DeterministicNN:
         self.learning_rate = learning_rate
         self.map = map
         self.sigma = sigma
+        self.collect_gradients_epochs = collect_gradients_epochs
 
         self.params_history = []
+        self.grad_history = []
 
     @partial(jax.jit, static_argnums=(0,))
     def train_step(self, state, inputs, targets):
@@ -134,15 +137,26 @@ class DeterministicNN:
         
         with tqdm(total=epochs, desc="Training Progress", leave=True) as pbar:
             for epoch in range(epochs):
+                # Store gradients from last n epochs
+                epoch_grads = []
+                collecting_grads = epoch >= (epochs - self.collect_gradients_epochs)
                 # Get learning rate and collection decision from schedule
                 learning_rate, should_collect = lr_schedule(epoch)
                 # Update learning rate if needed 
                 self.update_learning_rate(learning_rate)
                 
+                
                 epoch_loss = 0.0
                 for i, (X_batch, y_batch) in enumerate(zip(X_batches, y_batches)):
                     self.state, batch_loss = self.train_step(self.state, X_batch, y_batch)
+                    if collecting_grads:
+                        epoch_grads.append(self._get_grads(X_batch, y_batch))
                     epoch_loss += batch_loss
+
+                if collecting_grads:
+                    # Average gradients across batches
+                    avg_grads = jax.tree_map(lambda *x: jnp.mean(jnp.stack(x), axis=0), *epoch_grads)
+                    self.grad_history.append(avg_grads)
                 
                 # Collect weights if scheduled
                 if should_collect:
@@ -159,10 +173,24 @@ class DeterministicNN:
         # Average collected weights if any were collected
         if self.params_history:
             self.state = self.state.replace(params=self.average_params())
+        
+        if epoch_grads:
+            self.average_grads = jax.tree_map(lambda *x: jnp.mean(jnp.stack(x), axis=0), *self.grad_history)
+
 
     def _store_params(self, params: Dict) -> None:
         self.params_history.append(params)
 
+    def _get_grads(self, inputs, targets):
+        dropout_key = jax.random.PRNGKey(0)
+        _, grads = jax.value_and_grad(self.total_loss)(
+            self.state.params,
+            inputs,
+            targets,
+            rngs={'dropout': dropout_key}
+        )
+        return grads
+    
     def average_params(self) -> Dict:
         """Average model parameters, excluding normalization layers"""
         if not self.params_history:
