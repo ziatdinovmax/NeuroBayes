@@ -155,7 +155,7 @@ class DeterministicNN:
 
                 if collecting_grads:
                     # Average gradients across batches
-                    avg_grads = jax.tree_map(lambda *x: jnp.mean(jnp.stack(x), axis=0), *epoch_grads)
+                    avg_grads = jax.tree_util.tree_map(lambda *x: jnp.mean(jnp.stack(x), axis=0), *epoch_grads)
                     self.grad_history.append(avg_grads)
                 
                 # Collect weights if scheduled
@@ -175,7 +175,7 @@ class DeterministicNN:
             self.state = self.state.replace(params=self.average_params())
         
         if epoch_grads:
-            self.average_grads = jax.tree_map(lambda *x: jnp.mean(jnp.stack(x), axis=0), *self.grad_history)
+            self.average_grads = jax.tree_util.tree_map(lambda *x: jnp.mean(jnp.stack(x), axis=0), *self.grad_history)
 
 
     def _store_params(self, params: Dict) -> None:
