@@ -46,7 +46,7 @@ class DeterministicNN:
                  map: bool = True,
                  sigma: float = 1.0,
                  swa_config: Optional[Dict] = None,
-                 collect_gradients_epochs: int = 0) -> None:
+                 collect_gradients: bool = False) -> None:
         
         input_shape = (input_shape,) if isinstance(input_shape, int) else input_shape
         self.model = architecture
@@ -87,7 +87,7 @@ class DeterministicNN:
         self.learning_rate = learning_rate
         self.map = map
         self.sigma = sigma
-        self.collect_gradients_epochs = collect_gradients_epochs
+        self.collect_gradients = collect_gradients
 
         self.params_history = []
         self.grad_history = []
@@ -120,14 +120,14 @@ class DeterministicNN:
             batch_size = len(X_train)
 
         # Calculate SWA start epoch
-        start_epoch = int(epochs * self.swa_config['start_pct'])
+        self.start_epoch = int(epochs * self.swa_config['start_pct'])
         
         # Create learning rate schedule
         lr_schedule = create_swa_schedule(
             schedule_type=self.swa_config['schedule'],
             initial_lr=self.learning_rate,
             swa_lr=self.swa_config['swa_lr'],
-            start_epoch=start_epoch,
+            start_epoch=self.start_epoch,
             total_epochs=epochs,
             cycle_length=self.swa_config.get('cycle_length'),
             decay_fraction=self.swa_config.get('decay_fraction', 0.05)
@@ -139,9 +139,7 @@ class DeterministicNN:
         
         with tqdm(total=epochs, desc="Training Progress", leave=True) as pbar:
             for epoch in range(epochs):
-                # Store gradients from last n epochs
-                epoch_grads = []
-                collecting_grads = epoch >= (epochs - self.collect_gradients_epochs)
+                collecting_grads = self.collect_gradients and epoch >= self.start_epoch
                 # Get learning rate and collection decision from schedule
                 learning_rate, should_collect = lr_schedule(epoch)
                 # Update learning rate if needed 
