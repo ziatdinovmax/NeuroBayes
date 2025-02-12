@@ -91,6 +91,8 @@ class DeterministicNN:
 
         self.params_history = []
         self.grad_history = []
+        self._current_epoch_grad = None
+        self._grad_count = 0
 
     @partial(jax.jit, static_argnums=(0,))
     def train_step(self, state, inputs, targets):
@@ -150,13 +152,12 @@ class DeterministicNN:
                 for i, (X_batch, y_batch) in enumerate(zip(X_batches, y_batches)):
                     self.state, batch_loss = self.train_step(self.state, X_batch, y_batch)
                     if collecting_grads:
-                        epoch_grads.append(self._get_grads(X_batch, y_batch))
+                        grads = self._get_grads(X_batch, y_batch)
+                        self._update_running_grad_average(grads)
                     epoch_loss += batch_loss
 
                 if collecting_grads:
-                    # Average gradients across batches
-                    avg_grads = jax.tree_util.tree_map(lambda *x: jnp.mean(jnp.stack(x), axis=0), *epoch_grads)
-                    self.grad_history.append(avg_grads)
+                    self.grad_history.append(self._current_epoch_grad)
                 
                 # Collect weights if scheduled
                 if should_collect:
@@ -174,9 +175,11 @@ class DeterministicNN:
         if self.params_history:
             self.state = self.state.replace(params=self.average_params())
         
-        if epoch_grads:
-            self.average_grads = jax.tree_util.tree_map(lambda *x: jnp.mean(jnp.stack(x), axis=0), *self.grad_history)
-
+        if self.grad_history:  # Check if we collected any gradients
+            self.average_grads = jax.tree_map(
+                lambda *epoch_grads: sum(epoch_grads) / len(epoch_grads),
+                *self.grad_history
+            )
 
     def _store_params(self, params: Dict) -> None:
         self.params_history.append(params)
@@ -190,6 +193,19 @@ class DeterministicNN:
             rngs={'dropout': dropout_key}
         )
         return grads
+    
+    def _update_running_grad_average(self, new_grads):
+        """Update running average of gradients."""
+        if self._current_epoch_grad is None:
+            self._current_epoch_grad = new_grads
+            self._grad_count = 1
+        else:
+            # Update running average
+            self._grad_count += 1
+            self._current_epoch_grad = jax.tree_util.tree_map(
+                lambda avg, new: avg + (new - avg) / self._grad_count,
+                self._current_epoch_grad, new_grads
+            )
     
     def average_params(self) -> Dict:
         """Average model parameters, excluding normalization layers"""
