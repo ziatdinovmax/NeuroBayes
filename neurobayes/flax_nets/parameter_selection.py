@@ -1,5 +1,4 @@
 import jax.numpy as jnp
-import jax
 from sklearn.cluster import KMeans
 from enum import Enum
 from typing import Dict, List, Tuple, Optional, Union
@@ -13,21 +12,21 @@ class SelectionMethod(Enum):
     MAGNITUDE = "magnitude"
     GRADIENT = "gradient"
     CLUSTERING = "clustering"
+    VARIANCE = "variance"
 
 def select_bayesian_weights(
     weights: jnp.ndarray,
     method: Union[str, SelectionMethod],
     layer_type: str,
     num_pairs: int = 100,
-    loss_fn: Optional[callable] = None,
+    grads: Optional[jnp.ndarray] = None,
+    param_history: Optional[jnp.ndarray] = None,
     threshold: Optional[float] = None,
     n_clusters: int = 10,
-    activation_stats: Optional[Dict] = None,
     token_frequencies: Optional[jnp.ndarray] = None,
 ) -> List[Tuple[int, int]]:
     """
-    Select weight pairs for Bayesian treatment from either embedding or dense layers.
-    For gradient method, loss_fn should directly return the gradient values.
+    Select neuron pairs (weights) for Bayesian treatment from either embedding or dense layers.
     """
     if isinstance(method, str):
         method = SelectionMethod(method.lower())
@@ -35,11 +34,13 @@ def select_bayesian_weights(
     if method == SelectionMethod.MAGNITUDE:
         return _select_by_magnitude(weights, num_pairs, threshold)
     elif method == SelectionMethod.GRADIENT:
-        if loss_fn is None:
-            raise ValueError("loss_fn must be provided for gradient-based selection")
-        # Now loss_fn returns gradients directly
-        grads = loss_fn(weights)  # No need for jax.grad anymore
+        if grads is None:
+            raise ValueError("grads must be provided for gradient-based selection")
         return _select_by_gradient_direct(grads, num_pairs)
+    elif method == SelectionMethod.VARIANCE:
+        if param_history is None:
+            raise ValueError("param_history must be provided for variance-based selection")
+        return _select_by_variance(param_history, num_pairs)
     elif method == SelectionMethod.CLUSTERING:
         return _select_by_clustering(
             weights, 
@@ -72,6 +73,22 @@ def _select_by_magnitude(
         selected_indices = np.argsort(magnitudes_flat)[-num_pairs:]
         rows, cols = np.unravel_index(selected_indices, weights.shape)
         pairs = list(zip(rows.tolist(), cols.tolist()))
+    
+    return pairs
+
+def _select_by_variance(
+    weight_history: jnp.ndarray,
+    num_pairs: int
+) -> List[Tuple[int, int]]:
+    """Select pairs based on weight variance across training iterations."""
+    # Compute variance across the history dimension
+    variances = jnp.var(weight_history, axis=0)
+    
+    # Select top-k by variance magnitude
+    var_flat = variances.ravel()
+    selected_indices = np.argsort(var_flat)[-num_pairs:]
+    rows, cols = np.unravel_index(selected_indices, variances.shape)
+    pairs = list(zip(rows.tolist(), cols.tolist()))
     
     return pairs
 
@@ -199,10 +216,14 @@ def select_bayesian_components(
     params = flatten_fn(model.get_params())
     
     # Get flattened gradients if needed
-    if method == 'gradient':
-        if not hasattr(model, 'grad_history') or not model.grad_history:
-            raise ValueError("No gradient history available. Run training with gradient collection.")
-        grads = flatten_fn(model.average_grads)
+    if method in ['gradient', 'variance']:
+        if method == 'gradient':
+            if not hasattr(model, 'grad_history') or not model.grad_history:
+                raise ValueError("No gradient history available. Run training with gradient collection.")
+            grads = flatten_fn(model.average_grads)
+        elif method == 'variance':
+            if not hasattr(model, 'params_history') or not model.params_history:
+                raise ValueError("No parameter history available for variance-based selection.")
     
     bayesian_components = {}
     for layer_name in layer_names:
@@ -229,7 +250,14 @@ def select_bayesian_components(
         # Add method-specific parameters
         if method == 'gradient':
             layer_grads = grads[layer_name][param_key]
-            layer_params['loss_fn'] = lambda _: layer_grads
+            layer_params['grads'] = layer_grads
+        elif method == 'variance':
+            # Flatten each params dict in the history
+            layer_param_history = jnp.stack([
+                flatten_fn(params)[layer_name][param_key]
+                for params in model.params_history
+            ])
+            layer_params['param_history'] = layer_param_history
             
         if is_embedding and param_info and 'token_frequencies' in param_info:
             layer_params['token_frequencies'] = param_info['token_frequencies'].get(layer_name)
