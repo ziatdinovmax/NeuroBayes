@@ -142,22 +142,20 @@ def partial_bayesian_conv(x: jnp.ndarray,
     
     # Apply convolution using JAX operations
     if input_dim == 1:
-        padding = [(kernel_size // 2, kernel_size // 2)]
         x = jax.lax.conv_general_dilated(
             x[..., None],  # Add channel dim
             kernel[..., None, :],  # Reshape kernel for 1D conv
             window_strides=(1,),
-            padding=padding,
+            padding='SAME',
             dimension_numbers=('NWHC', 'WHIO', 'NWHC')
         )
     
     elif input_dim == 2:
-        padding = [(kernel_size // 2, kernel_size // 2), (kernel_size // 2, kernel_size // 2)]
         x = jax.lax.conv_general_dilated(
             x,
             kernel,
             window_strides=(1, 1),
-            padding=padding,
+            padding='SAME',
             dimension_numbers=('NHWC', 'HWIO', 'NHWC')
         )
     
@@ -176,7 +174,7 @@ def partial_bayesian_conv(x: jnp.ndarray,
             jax.lax.max,
             window_dimensions=(1, 2, 1),
             window_strides=(1, 2, 1),
-            padding='VALID'
+            padding='SAME'
         )
     elif input_dim == 2:
         x = jax.lax.reduce_window(
@@ -185,7 +183,7 @@ def partial_bayesian_conv(x: jnp.ndarray,
             jax.lax.max,
             window_dimensions=(1, 2, 2, 1),
             window_strides=(1, 2, 2, 1),
-            padding='VALID'
+            padding='SAME'
         )
     
     return x
