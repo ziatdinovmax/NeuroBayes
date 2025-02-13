@@ -5,35 +5,43 @@ import numpyro.distributions as dist
 import jax
 import jax.numpy as jnp
 
-from ..flax_nets import get_conv_and_pool_ops
 
 
 def partial_bayesian_dense(x, pretrained_kernel, pretrained_bias, prob_neurons, 
                           priors_sigma, layer_name, activation=None):
     """
-    A dense layer function where only specified neurons are Bayesian.
+    A dense layer function where only specified pairs of neurons are Bayesian.
     """
-    if prob_neurons is not None:
-        # Convert to array for indexing
-        prob_neurons = jnp.array(prob_neurons)
-        
-        # Start with pretrained parameters
+    prob_weights = prob_neurons
+    if prob_weights is not None:
+        # Initialize with pretrained values
         kernel = pretrained_kernel
         bias = pretrained_bias
         
-        # Sample parameters for the Bayesian neurons
-        kernel_prob = numpyro.sample(
+        # Create array indices for probabilistic weights
+        input_idx = jnp.array([i for i, _ in prob_weights])
+        output_idx = jnp.array([j for _, j in prob_weights])
+        
+        # Get current values for probabilistic weights
+        prob_weight_values = pretrained_kernel[input_idx, output_idx]
+        
+        # Sample new values
+        new_prob_weights = numpyro.sample(
             f"{layer_name}_kernel_prob",
-            dist.Normal(kernel[:, prob_neurons], priors_sigma).to_event(2)
-        )
-        bias_prob = numpyro.sample(
-            f"{layer_name}_bias_prob",
-            dist.Normal(bias[prob_neurons], priors_sigma).to_event(1)
+            dist.Normal(prob_weight_values, priors_sigma)
         )
         
-        # Update the parameters
-        kernel = kernel.at[:, prob_neurons].set(kernel_prob)
-        bias = bias.at[prob_neurons].set(bias_prob)
+        # Update only the probabilistic weights
+        kernel = kernel.at[input_idx, output_idx].set(new_prob_weights)
+        
+        # Sample new bias values for those outputs
+        new_prob_biases = numpyro.sample(
+            f"{layer_name}_bias_prob",
+            dist.Normal(pretrained_bias[output_idx], priors_sigma)
+        )
+        
+        # Update the biases
+        bias = bias.at[output_idx].set(new_prob_biases)
     else:
         # Full Bayesian layer
         kernel = numpyro.sample(
@@ -54,11 +62,14 @@ def partial_bayesian_dense(x, pretrained_kernel, pretrained_bias, prob_neurons,
 
 
 def partial_bayesian_embed(x, pretrained_embedding, prob_indices, 
-                          priors_sigma, layer_name, dtype=None):
+                          priors_sigma, layer_name):
     """
-    A partial Bayesian embedding layer that matches Flax's Embed functionality.
+    A connection-specific partial Bayesian embedding layer that matches Flax's Embed functionality.
+    prob_pairs should be a list of tuples (embedding_idx, feature_idx) specifying which
+    specific embedding-feature connections should be Bayesian.
     """
-    # Type checking
+
+    prob_pairs = prob_indices
     if not jnp.issubdtype(x.dtype, jnp.integer):
         raise ValueError('Input type must be an integer or unsigned integer.')
     
@@ -66,12 +77,19 @@ def partial_bayesian_embed(x, pretrained_embedding, prob_indices,
     
     # Handle special case when num_embeddings = 1
     if num_embeddings == 1:
-        if prob_indices is not None and len(prob_indices) > 0 and 0 in prob_indices:
-            # Sample the single embedding vector
-            embedding_matrix = numpyro.sample(
-                f"{layer_name}_embedding",
-                dist.Normal(pretrained_embedding, priors_sigma).to_event(2)
+        if prob_pairs is not None and len(prob_pairs) > 0 and any(idx == 0 for idx, _ in prob_pairs):
+            # For num_embeddings = 1, we need to handle the specific feature indices
+            embedding_matrix = pretrained_embedding.copy()
+            feature_indices = [f_idx for _, f_idx in prob_pairs if f_idx < features]
+            
+            # Sample only the specified feature connections
+            prob_features = numpyro.sample(
+                f"{layer_name}_embedding_features",
+                dist.Normal(embedding_matrix[0, feature_indices], priors_sigma)
             )
+            
+            # Update only the probabilistic features
+            embedding_matrix = embedding_matrix.at[0, feature_indices].set(prob_features)
         else:
             embedding_matrix = pretrained_embedding
             
@@ -86,20 +104,23 @@ def partial_bayesian_embed(x, pretrained_embedding, prob_indices,
     # Start with pretrained embedding matrix
     embedding_matrix = pretrained_embedding
     
-    if prob_indices is not None and len(prob_indices) > 0:
-        # Convert indices to array for proper indexing
-        prob_indices = jnp.array(prob_indices)
+    if prob_pairs is not None and len(prob_pairs) > 0:
+        # Convert pairs to arrays for proper indexing
+        embedding_idx = jnp.array([i for i, _ in prob_pairs])
+        feature_idx = jnp.array([j for _, j in prob_pairs])
         
-        # Sample parameters only for the Bayesian embedding vectors
-        embeddings_prob = numpyro.sample(
+        # Get current values for probabilistic connections
+        prob_values = embedding_matrix[embedding_idx, feature_idx]
+        
+        # Sample new values for specific connections
+        new_prob_values = numpyro.sample(
             f"{layer_name}_embedding_prob",
-            dist.Normal(embedding_matrix[prob_indices], priors_sigma).to_event(2)
+            dist.Normal(prob_values, priors_sigma)
         )
         
-        # Update only the probabilistic embeddings
-        embedding_matrix = embedding_matrix.at[prob_indices].set(embeddings_prob)
+        # Update only the specific probabilistic connections
+        embedding_matrix = embedding_matrix.at[embedding_idx, feature_idx].set(new_prob_values)
     
-    # Use take for proper indexing behavior (matching Flax)
     return jnp.take(embedding_matrix, x, axis=0)
 
 

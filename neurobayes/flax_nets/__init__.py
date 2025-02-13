@@ -6,3 +6,4 @@ from .splitter import *
 from .configs import *
 from .config_utils import *
 from .train_utils import *
+from .parameter_selection import select_bayesian_components

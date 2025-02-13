@@ -12,7 +12,7 @@ from .models.bnn_heteroskedastic_model import VarianceModelHeteroskedasticBNN
 from .models.partial_bnn_heteroskedastic import HeteroskedasticPartialBNN
 from .flax_nets.deterministic_nn import DeterministicNN
 from .flax_nets import FlaxConvNet, FlaxConvNet2Head, FlaxMLP, FlaxMLP2Head, FlaxTransformer
-from .flax_nets.config_utils import select_probabilistic_components
+from .flax_nets.parameter_selection import select_bayesian_components
 
 from .models import kernels
 from .utils import priors
@@ -42,5 +42,5 @@ __all__ = [
     "priors",
     "utils",
     "genfunc",
-    "select_probabilistic_components"
+    "select_bayesian_components"
 ]
