@@ -5,6 +5,7 @@ from .models.vidkl import VIDKL
 from .models.bnn import BNN
 from .models.partial_bnn import PartialBNN
 from .models.partial_bnn_mlp import PartialBayesianMLP
+from .models.partial_bnn_conv import PartialBayesianConvNet
 from .models.partial_bnn_transformer import PartialBayesianTransformer
 from .models.bnn_heteroskedastic import HeteroskedasticBNN
 from .models.bnn_heteroskedastic_model import VarianceModelHeteroskedasticBNN
@@ -26,6 +27,7 @@ __all__ = [
     "BNN",
     "PartialBNN",
     "PartialBayesianMLP",
+    "PartialBayesianConvNet",
     "HeteroskedasticBNN",
     "VarianceModelHeteroskedasticBNN",
     "HeteroskedasticPartialBNN",
