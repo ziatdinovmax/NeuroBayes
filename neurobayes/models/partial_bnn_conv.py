@@ -7,6 +7,7 @@ import numpyro.distributions as dist
 from numpyro.contrib.module import random_flax_module
 
 from .bnn import BNN
+from .hybrid_layers import partial_bayesian_conv, partial_bayesian_dense
 from ..flax_nets import FlaxConvNet, DeterministicNN
 from ..flax_nets import MLPLayerModule, ConvLayerModule
 from ..flax_nets import extract_configs
@@ -15,13 +16,18 @@ from ..utils import flatten_params_dict
 
 class PartialBayesianConvNet(BNN):
     """
-    Partially stochastic (Bayesian) ConvNet.
+    Partially stochastic (Bayesian) ConvNet, with the option that in
+    selected layers only a subset of neurons/channels are treated as stochastic.
 
     Args:
         convnet: Neural network architecture (FlaxConvNet)
         deterministic_weights: Pre-trained deterministic weights
         num_probabilistic_layers: Number of layers at the end to be treated as stochastic
         probabilistic_layer_names: Names of ConvNet modules to be treated probabilistically
+        probabilistic_neurons: Optional dict mapping layer names to lists of unit
+            indices that should be Bayesian. For conv layers, these are channel indices;
+            for dense layers, these are neuron indices. For layers not in this dict,
+            the entire layer will be treated as Bayesian.
         num_classes: Number of classes for classification task
         noise_prior: Custom prior for observational noise distribution
     """
@@ -31,6 +37,7 @@ class PartialBayesianConvNet(BNN):
                  deterministic_weights: Optional[Dict[str, jnp.ndarray]] = None,
                  num_probabilistic_layers: int = None,
                  probabilistic_layer_names: List[str] = None,
+                 probabilistic_neurons: Optional[Dict[str, List[int]]] = None,
                  num_classes: Optional[int] = None,
                  noise_prior: Optional[dist.Distribution] = None
                  ) -> None:
@@ -40,10 +47,21 @@ class PartialBayesianConvNet(BNN):
         self.deterministic_weights = deterministic_weights
         self.layer_configs = extract_configs(
             convnet, probabilistic_layer_names, num_probabilistic_layers)
+            
+        # Add probabilistic units to configs
+        if probabilistic_neurons is not None:
+            for config in self.layer_configs:
+                layer_name = config['layer_name']
+                if layer_name in probabilistic_neurons:
+                    config['probabilistic_neurons'] = probabilistic_neurons[layer_name]
+                else:
+                    config['probabilistic_neurons'] = None
+        else:
+            for config in self.layer_configs:
+                config['probabilistic_neurons'] = None
 
     def model(self, X: jnp.ndarray, y: jnp.ndarray = None, priors_sigma: float = 1.0, **kwargs) -> None:
         """ConvNet model with partial Bayesian inference"""
-        net = self.deterministic_nn
         pretrained_priors = flatten_params_dict(self.deterministic_weights)
         
         def prior(name, shape):
@@ -67,37 +85,96 @@ class PartialBayesianConvNet(BNN):
             if idx > last_conv_idx and idx-1 == last_conv_idx:
                 current_input = current_input.reshape((current_input.shape[0], -1))
             
-            if config["layer_type"] == "conv":
-                layer = ConvLayerModule(
-                    features=config['features'],
-                    activation=config['activation'],
-                    layer_name=layer_name,
-                    input_dim=config['input_dim'],
-                    kernel_size=config['kernel_size']
-                )
-            else:  # Dense layer
-                layer = MLPLayerModule(
-                    features=config['features'],
-                    activation=config['activation'],
-                    layer_name=layer_name
-                )
-            
             if config['is_probabilistic']:
-                net = random_flax_module(
-                    layer_name, layer, 
-                    input_shape=(1, *current_input.shape[1:]),
-                    prior=prior
-                )
-                current_input = net(current_input, enable_dropout=False)
+                if config['probabilistic_neurons'] is not None:
+                    if config["layer_type"] == "conv":
+                        # Use custom partial Bayesian implementation for channel-level control
+                        current_input = partial_bayesian_conv(
+                            current_input,
+                            pretrained_kernel=pretrained_priors[layer_name]["kernel"],
+                            pretrained_bias=pretrained_priors[layer_name]["bias"],
+                            prob_channels=config['probabilistic_neurons'],
+                            priors_sigma=priors_sigma,
+                            layer_name=layer_name,
+                            activation=config['activation'],
+                            input_dim=config['input_dim'],
+                            kernel_size=config['kernel_size']
+                        )
+                    else:  # Dense layer
+                        current_input = partial_bayesian_dense(
+                            current_input,
+                            pretrained_kernel=pretrained_priors[layer_name]["kernel"],
+                            pretrained_bias=pretrained_priors[layer_name]["bias"],
+                            prob_neurons=config['probabilistic_neurons'],
+                            priors_sigma=priors_sigma,
+                            layer_name=layer_name,
+                            activation=config['activation']
+                        )
+                else:
+                    # Use standard random_flax_module for full layer Bayesian treatment
+                    if config["layer_type"] == "conv":
+                        layer = ConvLayerModule(
+                            features=config['features'],
+                            activation=config['activation'],
+                            layer_name=layer_name,
+                            input_dim=config['input_dim'],
+                            kernel_size=config['kernel_size']
+                        )
+                    else:  # Dense layer
+                        layer = MLPLayerModule(
+                            features=config['features'],
+                            activation=config['activation'],
+                            layer_name=layer_name
+                        )
+                    
+                    net = random_flax_module(
+                        layer_name, layer, 
+                        input_shape=(1, *current_input.shape[1:]),
+                        prior=prior
+                    )
+                    current_input = net(current_input, enable_dropout=False)
             else:
-                params = {
-                    "params": {
-                        layer_name: {
-                            "kernel": pretrained_priors[layer_name]["kernel"],
-                            "bias": pretrained_priors[layer_name]["bias"]
+                # Deterministic layers implementation
+                if config["layer_type"] == "conv":
+                    layer = ConvLayerModule(
+                        features=config['features'],
+                        activation=config['activation'],
+                        layer_name=layer_name,
+                        input_dim=config['input_dim'],
+                        kernel_size=config['kernel_size']
+                    )
+                else:  # Dense layer
+                    layer = MLPLayerModule(
+                        features=config['features'],
+                        activation=config['activation'],
+                        layer_name=layer_name
+                    )
+                    
+                # Structure params correctly for the layer type
+                if config["layer_type"] == "conv":
+                    params = {
+                        "params": {
+                            f"{layer_name}": {  # Conv layer name becomes the scope
+                                "kernel": pretrained_priors[layer_name]["kernel"],
+                                "bias": pretrained_priors[layer_name]["bias"]
+                            }
                         }
                     }
-                }
+                else:  # Dense layer
+                    layer = MLPLayerModule(
+                        features=config['features'],
+                        activation=config['activation'],
+                        layer_name=layer_name
+                    )
+                    params = {
+                        "params": {
+                            f"{layer_name}": {  # Dense layer scope
+                                "kernel": pretrained_priors[layer_name]["kernel"],
+                                "bias": pretrained_priors[layer_name]["bias"]
+                            }
+                        }
+                    }
+                
                 current_input = layer.apply(params, current_input, enable_dropout=False)
 
         if self.is_regression:
