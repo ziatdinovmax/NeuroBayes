@@ -57,24 +57,34 @@ def get_prob_indices(model, layer_names, prob_ratio=0.2):
     return indices_dict
 
 
-def _select_probabilistic_components(weights, method='magnitude', threshold_percentile=90, top_k_percent=10, grads=None, for_embedding=False):
+def _select_probabilistic_components(weights, method='magnitude', threshold_percentile=90, top_k_percent=10, grads=None, for_embedding=False, for_conv=False):
     """Helper function to select components based on weights/gradients."""
     if method == 'magnitude':
-        axis = 1 if for_embedding else 0
-        magnitudes = jnp.linalg.norm(weights, axis=axis)
+        if for_conv:
+            # Reshape (..., out_channels) -> (-1, out_channels), works for both 1D and 2D convolutions
+            magnitudes = jnp.linalg.norm(weights.reshape(-1, weights.shape[-1]), axis=0)
+        else:
+            axis = 1 if for_embedding else 0
+            magnitudes = jnp.linalg.norm(weights, axis=axis)
         threshold = jnp.percentile(magnitudes, threshold_percentile)
         indices = jnp.where(magnitudes > threshold)[0]
 
     elif method == 'variance':
-        axis = 1 if for_embedding else 0
-        variances = jnp.var(weights, axis=axis)
+        if for_conv:
+            variances = jnp.var(weights.reshape(-1, weights.shape[-1]), axis=0)
+        else:
+            axis = 1 if for_embedding else 0
+            variances = jnp.var(weights, axis=axis)
         k = int(len(variances) * top_k_percent / 100)
         indices = jnp.argsort(variances)[-k:]
 
     elif method == 'gradient':
         if grads is None:
             raise ValueError("Gradient information required for gradient-based selection")
-        sensitivities = jnp.mean(jnp.abs(grads), axis=0)
+        if for_conv:
+            sensitivities = jnp.mean(jnp.abs(grads).reshape(-1, grads.shape[-1]), axis=0)
+        else:
+            sensitivities = jnp.mean(jnp.abs(grads), axis=0)
         k = int(len(sensitivities) * top_k_percent / 100)
         indices = jnp.argsort(sensitivities)[-k:]
 
@@ -115,7 +125,10 @@ def select_probabilistic_components(model,
             raise ValueError(f"Layer {layer_name} not found in model parameters")
             
         # For transformer, only token/pos embeddings are embedding layers
-        is_embedding = is_transformer and 'Embed' in layer_name
+        is_embedding = 'Embed' in layer_name
+        kernel_shape = flat_params[layer_name]['embedding' if is_embedding else 'kernel'].shape
+        is_conv = len(kernel_shape) > 2
+        
         weights = flat_params[layer_name]['embedding' if is_embedding else 'kernel']
         grads = None if flat_grads is None else flat_grads[layer_name]['embedding' if is_embedding else 'kernel']
         
@@ -125,7 +138,8 @@ def select_probabilistic_components(model,
             threshold_percentile=threshold_percentile,
             top_k_percent=top_k_percent,
             grads=grads,
-            for_embedding=is_embedding
+            for_embedding=is_embedding,
+            for_conv=is_conv
         )
         
         prob_components[layer_name] = indices.tolist()
