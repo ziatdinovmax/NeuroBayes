@@ -46,7 +46,9 @@ class DeterministicNN:
                  map: bool = True,
                  sigma: float = 1.0,
                  swa_config: Optional[Dict] = None,
-                 collect_gradients: bool = False) -> None:
+                 collect_gradients: bool = False,
+                 rng_key: Optional[jnp.array] = 0
+                 ) -> None:
         
         input_shape = (input_shape,) if isinstance(input_shape, int) else input_shape
         self.model = architecture
@@ -59,7 +61,7 @@ class DeterministicNN:
         self.loss = loss
         
         # Initialize model
-        key = jax.random.PRNGKey(0)
+        key = jax.random.PRNGKey(rng_key)
         params = self.model.init(
             key,
             jnp.ones((1, *input_shape), dtype=input_dtype)
