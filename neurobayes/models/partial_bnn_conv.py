@@ -98,7 +98,6 @@ class PartialBayesianConvNet(BNN):
                             layer_name=layer_name,
                             activation=config['activation'],
                             input_dim=config['input_dim'],
-                            kernel_size=config['kernel_size']
                         )
                     else:  # Dense layer
                         current_input = partial_bayesian_dense(

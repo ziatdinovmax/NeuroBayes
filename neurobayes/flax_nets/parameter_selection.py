@@ -122,37 +122,30 @@ def _select_by_clustering(
         clusters = kmeans.fit_predict(weights_np)
         
         pairs = []
-        pairs_per_cluster = num_pairs_per_cluster  # Each cluster gets equal share
-        
         for cluster_idx in range(n_clusters):
             mask = clusters == cluster_idx
             cluster_emb_indices = np.where(mask)[0]
             
-            if len(cluster_emb_indices) > 0:
-                # Select embeddings with replacement - same embedding can be selected multiple times
-                if token_frequencies is not None:
-                    cluster_frequencies = token_frequencies[cluster_emb_indices]
-                    cluster_probs = cluster_frequencies / cluster_frequencies.sum()
-                    selected_embs = np.random.choice(
-                        cluster_emb_indices,
-                        size=pairs_per_cluster,
-                        p=cluster_probs,
-                        replace=True  # Allow reselection of same embedding
-                    )
-                else:
-                    selected_embs = np.random.choice(
-                        cluster_emb_indices,
-                        size=pairs_per_cluster,
-                        replace=True  # Allow reselection of same embedding
-                    )
-                
-                # Select random features for each selected embedding
-                selected_feats = np.random.randint(
-                    0, weights.shape[1],
-                    size=pairs_per_cluster
+            if token_frequencies is not None and len(cluster_emb_indices) > 0:
+                cluster_frequencies = token_frequencies[cluster_emb_indices]
+                cluster_probs = cluster_frequencies / cluster_frequencies.sum()
+                selected_embs = np.random.choice(
+                    cluster_emb_indices,
+                    size=min(num_pairs_per_cluster, len(cluster_emb_indices)),
+                    p=cluster_probs
                 )
-                
-                pairs.extend(zip(selected_embs.tolist(), selected_feats.tolist()))
+            else:
+                selected_embs = np.random.choice(
+                    cluster_emb_indices,
+                    size=min(num_pairs_per_cluster, len(cluster_emb_indices))
+                )
+            
+            selected_feats = np.random.randint(
+                0, weights.shape[1],
+                size=len(selected_embs)
+            )
+            
+            pairs.extend(zip(selected_embs.tolist(), selected_feats.tolist()))
     else:
         kmeans_in = KMeans(n_clusters=n_clusters)
         clusters_in = kmeans_in.fit_predict(weights_np)
@@ -199,6 +192,187 @@ def _select_by_clustering(
     return pairs
 
 
+def select_bayesian_weights_conv(
+    weights: jnp.ndarray,
+    method: Union[str, SelectionMethod],
+    layer_type: str,  # Added for consistency
+    num_pairs: int = 100,
+    grads: Optional[jnp.ndarray] = None,
+    param_history: Optional[jnp.ndarray] = None,
+    threshold: Optional[float] = None,
+    n_clusters: int = 10,
+    token_frequencies: Optional[jnp.ndarray] = None,  # Added for consistency
+) -> List[Tuple[int, int]]:
+    """
+    Select input-output channel pairs for Bayesian treatment from convolutional layers.
+    
+    Args:
+        weights: Array of shape:
+            - 3D (kernel_size, in_channels, out_channels) for 1D convolution
+            - 4D (height, width, in_channels, out_channels) for 2D convolution
+        method: Selection method (magnitude, gradient, clustering, variance)
+        layer_type: Type of layer ('conv1d' or 'conv2d')
+        num_pairs: Number of channel pairs to select
+        grads: Optional gradients for gradient-based selection
+        param_history: Optional parameter history for variance-based selection
+        threshold: Optional magnitude threshold
+        n_clusters: Number of clusters for clustering-based selection
+        token_frequencies: Not used for conv layers, added for API consistency
+    """
+    if isinstance(method, str):
+        method = SelectionMethod(method.lower())
+    
+    is_1d = layer_type == 'conv1d'
+    spatial_axes = (0,) if is_1d else (0, 1)
+    
+    if method == SelectionMethod.MAGNITUDE:
+        channel_magnitudes = jnp.mean(jnp.abs(weights), axis=spatial_axes)
+        return _select_by_magnitude_conv(channel_magnitudes, num_pairs, threshold)
+    
+    elif method == SelectionMethod.GRADIENT:
+        if grads is None:
+            raise ValueError("grads must be provided for gradient-based selection")
+        channel_grads = jnp.mean(jnp.abs(grads), axis=spatial_axes)
+        return _select_by_gradient_conv(channel_grads, num_pairs)
+    
+    elif method == SelectionMethod.VARIANCE:
+        if param_history is None:
+            raise ValueError("param_history must be provided for variance-based selection")
+        channel_variances = jnp.mean(jnp.var(param_history, axis=0), axis=spatial_axes)
+        return _select_by_variance_conv(channel_variances, num_pairs)
+    
+    elif method == SelectionMethod.CLUSTERING:
+        if is_1d:
+            kernel_size, in_c, out_c = weights.shape
+            weights_in = weights.transpose(1, 0, 2).reshape(in_c, -1)
+            weights_out = weights.transpose(2, 0, 1).reshape(out_c, -1)
+        else:
+            h, w, in_c, out_c = weights.shape
+            weights_in = weights.transpose(2, 0, 1, 3).reshape(in_c, -1)
+            weights_out = weights.transpose(3, 0, 1, 2).reshape(out_c, -1)
+        
+        return _select_by_clustering_conv(
+            weights_in=weights_in,
+            weights_out=weights_out,
+            n_clusters=n_clusters,
+            num_pairs_per_cluster=num_pairs // n_clusters,
+            layer_type=layer_type  # Pass through layer_type
+        )
+    else:
+        raise ValueError(f"Unknown method: {method}")
+
+def _select_by_clustering_conv(
+    weights_in: jnp.ndarray,
+    weights_out: jnp.ndarray,
+    n_clusters: int,
+    num_pairs_per_cluster: int,
+    layer_type: str  # Added for consistency with dense/embedding
+) -> List[Tuple[int, int]]:
+    """
+    Select channel pairs using clustering approach.
+    
+    Args:
+        weights_in: Reshaped weights (in_channels, -1)
+        weights_out: Reshaped weights (out_channels, -1)
+        n_clusters: Number of clusters
+        num_pairs_per_cluster: Number of pairs to select per cluster
+        layer_type: Type of convolution layer ('conv1d' or 'conv2d')
+    """
+    # Cluster input channels
+    kmeans_in = KMeans(n_clusters=n_clusters)
+    clusters_in = kmeans_in.fit_predict(weights_in)
+    
+    # Cluster output channels
+    kmeans_out = KMeans(n_clusters=n_clusters)
+    clusters_out = kmeans_out.fit_predict(weights_out)
+    
+    pairs = []
+    pairs_per_input_cluster = num_pairs_per_cluster // 2
+    
+    # Select from input channel clusters
+    in_channels = weights_in.shape[0]
+    out_channels = weights_out.shape[0]
+    
+    for cluster_idx in range(n_clusters):
+        # Input channel selection
+        in_mask = clusters_in == cluster_idx
+        in_indices = np.where(in_mask)[0]
+        
+        if len(in_indices) > 0:
+            selected_inputs = np.random.choice(
+                in_indices,
+                size=min(pairs_per_input_cluster, len(in_indices))
+            )
+            selected_outputs = np.random.randint(
+                0, out_channels,
+                size=len(selected_inputs)
+            )
+            pairs.extend(zip(selected_inputs.tolist(), selected_outputs.tolist()))
+        
+        # Output channel selection
+        out_mask = clusters_out == cluster_idx
+        out_indices = np.where(out_mask)[0]
+        
+        if len(out_indices) > 0:
+            selected_outputs = np.random.choice(
+                out_indices,
+                size=min(pairs_per_input_cluster, len(out_indices))
+            )
+            selected_inputs = np.random.randint(
+                0, in_channels,
+                size=len(selected_outputs)
+            )
+            pairs.extend(zip(selected_inputs.tolist(), selected_outputs.tolist()))
+    
+    return pairs
+
+def _select_by_magnitude_conv(
+    channel_magnitudes: jnp.ndarray,
+    num_pairs: int,
+    threshold: Optional[float] = None
+) -> List[Tuple[int, int]]:
+    """Select channel pairs based on aggregated magnitude."""
+    if threshold is not None:
+        indices = jnp.where(channel_magnitudes > threshold)
+        channel_pairs = list(zip(indices[0].tolist(), indices[1].tolist()))
+        if len(channel_pairs) > num_pairs:
+            magnitudes_flat = channel_magnitudes.ravel()
+            selected_indices = np.argsort(magnitudes_flat)[-num_pairs:]
+            in_channels, out_channels = np.unravel_index(selected_indices, channel_magnitudes.shape)
+            channel_pairs = list(zip(in_channels.tolist(), out_channels.tolist()))
+    else:
+        magnitudes_flat = channel_magnitudes.ravel()
+        selected_indices = np.argsort(magnitudes_flat)[-num_pairs:]
+        in_channels, out_channels = np.unravel_index(selected_indices, channel_magnitudes.shape)
+        channel_pairs = list(zip(in_channels.tolist(), out_channels.tolist()))
+    
+    return channel_pairs
+
+def _select_by_variance_conv(
+    channel_variances: jnp.ndarray,
+    num_pairs: int
+) -> List[Tuple[int, int]]:
+    """Select channel pairs based on aggregated variance."""
+    var_flat = channel_variances.ravel()
+    selected_indices = np.argsort(var_flat)[-num_pairs:]
+    in_channels, out_channels = np.unravel_index(selected_indices, channel_variances.shape)
+    channel_pairs = list(zip(in_channels.tolist(), out_channels.tolist()))
+    
+    return channel_pairs
+
+def _select_by_gradient_conv(
+    channel_grads: jnp.ndarray,
+    num_pairs: int
+) -> List[Tuple[int, int]]:
+    """Select channel pairs based on aggregated gradient magnitude."""
+    grad_flat = channel_grads.ravel()
+    selected_indices = np.argsort(grad_flat)[-num_pairs:]
+    in_channels, out_channels = np.unravel_index(selected_indices, channel_grads.shape)
+    channel_pairs = list(zip(in_channels.tolist(), out_channels.tolist()))
+    
+    return channel_pairs
+
+
 def select_bayesian_components(
     model,
     layer_names: Union[str, List[str]],
@@ -210,11 +384,16 @@ def select_bayesian_components(
 ) -> Dict[str, List[tuple]]:
     """
     Select weight pairs for Bayesian treatment from multiple layers.
+    Supports dense, embedding, 1D conv, and 2D conv layers.
     Uses model's stored gradients when gradient-based selection is chosen.
     """
     # Convert single layer name to list
     if isinstance(layer_names, str):
         layer_names = [layer_names]
+    
+    # Convert method to SelectionMethod if string
+    if isinstance(method, str):
+        method = SelectionMethod(method.lower())
     
     # Determine model type and get appropriate flatten function
     flatten_fn = flatten_transformer_params_dict if isinstance(model.model, FlaxTransformer) else flatten_params_dict
@@ -223,14 +402,15 @@ def select_bayesian_components(
     params = flatten_fn(model.get_params())
     
     # Get flattened gradients if needed
-    if method in ['gradient', 'variance']:
-        if method == 'gradient':
-            if not hasattr(model, 'grad_history') or not model.grad_history:
-                raise ValueError("No gradient history available. Run training with gradient collection.")
-            grads = flatten_fn(model.average_grads)
-        elif method == 'variance':
-            if not hasattr(model, 'params_history') or not model.params_history:
-                raise ValueError("No parameter history available for variance-based selection.")
+    if method == SelectionMethod.GRADIENT:
+        if not hasattr(model, 'grad_history') or not model.grad_history:
+            raise ValueError("No gradient history available. Run training with gradient collection.")
+        grads = flatten_fn(model.average_grads)
+    
+    # Get parameter history if needed
+    if method == SelectionMethod.VARIANCE:
+        if not hasattr(model, 'params_history') or not model.params_history:
+            raise ValueError("No parameter history available for variance-based selection.")
     
     bayesian_components = {}
     for layer_name in layer_names:
@@ -240,11 +420,19 @@ def select_bayesian_components(
         # Determine layer type and get weights
         is_embedding = 'embed' in layer_name.lower()
         param_key = 'embedding' if is_embedding else 'kernel'
-        layer_type = 'embedding' if is_embedding else 'dense'
         
         weights = params[layer_name][param_key]
+        weight_dims = len(weights.shape)
         
-        # Get layer-specific parameters
+        # Determine layer type based on weight dimensions
+        if weight_dims == 2:
+            layer_type = 'embedding' if is_embedding else 'dense'
+        elif weight_dims in [3, 4]:
+            layer_type = 'conv1d' if weight_dims == 3 else 'conv2d'
+        else:
+            raise ValueError(f"Unexpected weight dimensions: {weight_dims}")
+        
+        # Prepare layer-specific parameters
         layer_params = {
             'weights': weights,
             'method': method,
@@ -255,26 +443,33 @@ def select_bayesian_components(
         }
         
         # Add method-specific parameters
-        if method == 'gradient':
+        if method == SelectionMethod.GRADIENT:
             layer_grads = grads[layer_name][param_key]
             layer_params['grads'] = layer_grads
-        elif method == 'variance':
+            
+        elif method == SelectionMethod.VARIANCE:
             # Flatten each params dict in the history
             layer_param_history = jnp.stack([
                 flatten_fn(params)[layer_name][param_key]
                 for params in model.params_history
             ])
             layer_params['param_history'] = layer_param_history
-            
+        
+        # Add embedding-specific parameters
         if is_embedding and param_info and 'token_frequencies' in param_info:
             layer_params['token_frequencies'] = param_info['token_frequencies'].get(layer_name)
-            
-        # Select pairs for this layer
+        
+        # Select pairs based on layer type
         try:
-            pairs = select_bayesian_weights(**layer_params)
+            if layer_type in ['conv1d', 'conv2d']:
+                pairs = select_bayesian_weights_conv(**layer_params)
+            else:
+                pairs = select_bayesian_weights(**layer_params)
+                
             bayesian_components[layer_name] = pairs
+            
         except Exception as e:
             print(f"Warning: Failed to process layer {layer_name}: {str(e)}")
             continue
-            
+    
     return bayesian_components

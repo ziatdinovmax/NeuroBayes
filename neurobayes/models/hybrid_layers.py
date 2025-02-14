@@ -125,41 +125,62 @@ def partial_bayesian_embed(x, pretrained_embedding, prob_indices,
 
 
 def partial_bayesian_conv(x: jnp.ndarray,
-                         pretrained_kernel: jnp.ndarray,
-                         pretrained_bias: jnp.ndarray,
-                         prob_channels: List[int],
-                         priors_sigma: float,
-                         layer_name: str,
-                         activation: Callable = None,
-                         input_dim: int = None,
-                         kernel_size: Union[int, Tuple[int, ...]] = 3) -> jnp.ndarray:
+                          pretrained_kernel: jnp.ndarray,
+                          pretrained_bias: jnp.ndarray,
+                          prob_channels: List[Tuple[int, int]],  # [(in_c, out_c), ...]
+                          priors_sigma: float,
+                          layer_name: str,
+                          activation: Callable = None,
+                          input_dim: int = None,
+                          ) -> jnp.ndarray:
     """
-    Implements a partially Bayesian convolutional layer where only specified channels
-    are treated as probabilistic.
+    Implements a partially Bayesian convolutional layer where specific input-output
+    channel pairs can be specified as probabilistic.
     """
-    # Get total number of output channels
-    n_channels = pretrained_kernel.shape[-1]
-    
-    # Convert prob_channels to array for easier handling
-    prob_channels = jnp.array(prob_channels)
-    
-    # Sample probabilistic parameters
-    kernel_prob = numpyro.sample(
-        f"{layer_name}.kernel_prob",
-        dist.Normal(pretrained_kernel[..., prob_channels], priors_sigma)
-    )
-    bias_prob = numpyro.sample(
-        f"{layer_name}.bias_prob",
-        dist.Normal(pretrained_bias[prob_channels], priors_sigma)
-    )
-    
-    # Initialize output arrays with deterministic values
-    kernel = pretrained_kernel
-    bias = pretrained_bias
-    
-    # Update probabilistic channels using scatter operations
-    kernel = kernel.at[..., prob_channels].set(kernel_prob)
-    bias = bias.at[prob_channels].set(bias_prob)
+    if prob_channels is not None:
+        # Initialize with pretrained values
+        kernel = pretrained_kernel
+        bias = pretrained_bias
+        
+        # Create array indices for probabilistic weights
+        in_c_idx = jnp.array([ic for ic, _ in prob_channels])
+        out_c_idx = jnp.array([oc for _, oc in prob_channels])
+        
+        # For each kernel spatial location, sample the specified channel pairs
+        kernel_shape = kernel.shape
+        for h in range(kernel_shape[0]):
+            for w in range(kernel_shape[1]):
+                # Get current values for probabilistic weights at this spatial location
+                prob_weight_values = kernel[h, w, in_c_idx, out_c_idx]
+                
+                # Sample new values for weights
+                new_prob_weights = numpyro.sample(
+                    f"{layer_name}_kernel_prob_{h}_{w}",
+                    dist.Normal(prob_weight_values, priors_sigma)
+                )
+                
+                # Update only the probabilistic weights
+                kernel = kernel.at[h, w, in_c_idx, out_c_idx].set(new_prob_weights)
+        
+        # Sample new bias values for outputs
+        new_prob_biases = numpyro.sample(
+            f"{layer_name}_bias_prob",
+            dist.Normal(pretrained_bias[out_c_idx], priors_sigma)
+        )
+
+        # Update the biases
+        bias = bias.at[out_c_idx].set(new_prob_biases)
+        
+    else:
+        # Full Bayesian layer
+        kernel = numpyro.sample(
+            f"{layer_name}_kernel",
+            dist.Normal(pretrained_kernel, priors_sigma).to_event(4)
+        )
+        bias = numpyro.sample(
+            f"{layer_name}_bias",
+            dist.Normal(pretrained_bias, priors_sigma).to_event(1)
+        )
     
     # Apply convolution using JAX operations
     if input_dim == 1:
