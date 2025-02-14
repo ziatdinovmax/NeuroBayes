@@ -122,30 +122,37 @@ def _select_by_clustering(
         clusters = kmeans.fit_predict(weights_np)
         
         pairs = []
+        pairs_per_cluster = num_pairs_per_cluster  # Each cluster gets equal share
+        
         for cluster_idx in range(n_clusters):
             mask = clusters == cluster_idx
             cluster_emb_indices = np.where(mask)[0]
             
-            if token_frequencies is not None and len(cluster_emb_indices) > 0:
-                cluster_frequencies = token_frequencies[cluster_emb_indices]
-                cluster_probs = cluster_frequencies / cluster_frequencies.sum()
-                selected_embs = np.random.choice(
-                    cluster_emb_indices,
-                    size=min(num_pairs_per_cluster, len(cluster_emb_indices)),
-                    p=cluster_probs
+            if len(cluster_emb_indices) > 0:
+                # Select embeddings with replacement - same embedding can be selected multiple times
+                if token_frequencies is not None:
+                    cluster_frequencies = token_frequencies[cluster_emb_indices]
+                    cluster_probs = cluster_frequencies / cluster_frequencies.sum()
+                    selected_embs = np.random.choice(
+                        cluster_emb_indices,
+                        size=pairs_per_cluster,
+                        p=cluster_probs,
+                        replace=True  # Allow reselection of same embedding
+                    )
+                else:
+                    selected_embs = np.random.choice(
+                        cluster_emb_indices,
+                        size=pairs_per_cluster,
+                        replace=True  # Allow reselection of same embedding
+                    )
+                
+                # Select random features for each selected embedding
+                selected_feats = np.random.randint(
+                    0, weights.shape[1],
+                    size=pairs_per_cluster
                 )
-            else:
-                selected_embs = np.random.choice(
-                    cluster_emb_indices,
-                    size=min(num_pairs_per_cluster, len(cluster_emb_indices))
-                )
-            
-            selected_feats = np.random.randint(
-                0, weights.shape[1],
-                size=len(selected_embs)
-            )
-            
-            pairs.extend(zip(selected_embs.tolist(), selected_feats.tolist()))
+                
+                pairs.extend(zip(selected_embs.tolist(), selected_feats.tolist()))
     else:
         kmeans_in = KMeans(n_clusters=n_clusters)
         clusters_in = kmeans_in.fit_predict(weights_np)
