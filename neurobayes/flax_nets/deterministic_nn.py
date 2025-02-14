@@ -19,7 +19,7 @@ class DeterministicNN:
     """
     Args:
         architecture: a Flax model
-        input_shape: (n_samples, n_features) or (n_samples, *dims, n_channels)
+        input_shape: (n_features,) or (*dims, n_channels)
         loss: type of loss, 'homoskedastic' (default) or 'heteroskedastic'
         learning_rate: Initial learning rate
         map: Uses maximum a posteriori approximation
