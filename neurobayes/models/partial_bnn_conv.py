@@ -37,7 +37,7 @@ class PartialBayesianConvNet(BNN):
                  deterministic_weights: Optional[Dict[str, jnp.ndarray]] = None,
                  num_probabilistic_layers: int = None,
                  probabilistic_layer_names: List[str] = None,
-                 probabilistic_neurons: Optional[Dict[str, List[int]]] = None,
+                 probabilistic_neurons: Optional[Dict[str, List[Tuple[int]]]] = None,
                  num_classes: Optional[int] = None,
                  noise_prior: Optional[dist.Distribution] = None
                  ) -> None:
