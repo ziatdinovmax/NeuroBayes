@@ -42,7 +42,7 @@ class PartialBayesianTransformer(BNN):
     Example:
         # Automatically select Bayesian weights using variance-based selection
         prob_neurons = select_bayesian_components(
-            model,
+            transformer,  # DeterministicNN class
             layer_names=['TokenEmbed', 'FinalDense1'],
             method='variance',
             num_pairs_per_layer=2

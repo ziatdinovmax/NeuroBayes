@@ -36,7 +36,7 @@ class PartialBayesianConvNet(BNN):
     Example:
         # Automatically select Bayesian weights using variance-based selection
         prob_neurons = select_bayesian_components(
-            model,
+            convnet,  # DeterministicNN class
             layer_names=['Conv0', 'Dense2'],
             method='variance',
             num_pairs_per_layer=2

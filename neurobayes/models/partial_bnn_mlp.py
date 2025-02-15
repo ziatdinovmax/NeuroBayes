@@ -38,7 +38,7 @@ class PartialBayesianMLP(BNN):
     Example:
         # Automatically select Bayesian weights using variance-based selection
         prob_neurons = select_bayesian_components(
-            model,
+            mlp,  # DeterministicNN class
             layer_names=['Dense0', 'Dense2'],
             method='variance',
             num_pairs_per_layer=2
