@@ -26,11 +26,31 @@ class PartialBayesianMLP(BNN):
         deterministic_weights: Pre-trained deterministic weights.
         num_probabilistic_layers: Number of layers at the end to be treated as stochastic.
         probabilistic_layer_names: Names of MLP modules to be treated probabilistically.
-        probabilistic_neurons: Optional dict mapping layer names to lists of neuron
-            indices (columns in the weight matrix / entries in the bias vector) that should be Bayesian.
-            For layers not in this dict, the entire layer will be treated as Bayesian.
+        probabilistic_neurons: Optional dict mapping layer names to lists of
+            (input_neuron, output_neuron) tuples specifying which weight connections
+            should be Bayesian. For layers not in this dict, the entire layer will be treated
+            as Bayesian. Can be automatically generated using select_bayesian_components() 
+            utility function which supports various selection methods including magnitude,
+            gradient, variance, and clustering-based approaches.
         num_classes: Number of classes for classification tasks.
         noise_prior: Custom prior for observational noise distribution.
+
+    Example:
+        # Automatically select Bayesian weights using variance-based selection
+        prob_neurons = select_bayesian_components(
+            model,
+            layer_names=['Dense0', 'Dense2'],
+            method='variance',
+            num_pairs_per_layer=2
+        )
+        
+        # Or manually specify weight connections
+        probabilistic_neurons = {
+            'Dense0': [(0, 1), (2, 3)],  # Make these input-output connections Bayesian
+            'Dense2': [(0, 5), (1, 10)]
+        }
+
+        # Note that you would typically need to make far more than 2 weights probabilistic
     """
     def __init__(self,
                  mlp: Type[FlaxMLP],

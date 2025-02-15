@@ -27,9 +27,34 @@ class PartialBayesianTransformer(BNN):
             "Block{i}_MLP_dense1", "Block{i}_MLP_dense2", "FinalDense1", "FinalDense2"
         num_probabilistic_layers: Alternative to probabilistic_layer_names.
             Number of final layers to be treated as probabilistic
+        probabilistic_neurons: Optional dict mapping layer names to lists of (input_idx, output_idx) 
+            tuples specifying which weight connections should be Bayesian.
+            For layers not in this dict, the entire layer will be treated as Bayesian.
+            For dense layers, pairs represent (input_neuron, output_neuron) connections.
+            For embedding layers, pairs represent (embedding_idx, feature_idx) connections.
+            Can be automatically generated using select_bayesian_components() utility function
+            which supports various selection methods including magnitude, gradient, variance,
+            and clustering-based approaches.
         num_classes: Number of classes for classification task.
             If None, the model performs regression. Defaults to None.
         noise_prior: Custom prior for observational noise distribution
+
+    Example:
+        # Automatically select Bayesian weights using variance-based selection
+        prob_neurons = select_bayesian_components(
+            model,
+            layer_names=['TokenEmbed', 'FinalDense1'],
+            method='variance',
+            num_pairs_per_layer=2
+        )
+
+        # Or manually specify weight connections
+        probabilistic_neurons = {
+            'TokenEmbed': [(0, 1), (2, 3)],  # Make these embedding-feature connections Bayesian
+            'FinalDense1': [(0, 5), (1, 10)]  # Make these input-output connections Bayesian
+        }
+
+        # Note that you would typically need to make far more than 2 weights probabilistic
     """
 
     def __init__(self,

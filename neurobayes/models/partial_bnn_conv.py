@@ -24,12 +24,31 @@ class PartialBayesianConvNet(BNN):
         deterministic_weights: Pre-trained deterministic weights
         num_probabilistic_layers: Number of layers at the end to be treated as stochastic
         probabilistic_layer_names: Names of ConvNet modules to be treated probabilistically
-        probabilistic_neurons: Optional dict mapping layer names to lists of unit
-            indices that should be Bayesian. For conv layers, these are channel indices;
-            for dense layers, these are neuron indices. For layers not in this dict,
-            the entire layer will be treated as Bayesian.
+        probabilistic_neurons: Optional dict mapping layer names to lists tuples with
+            indices that should be Bayesian. For conv layers, these are (input_channel, output_channel) indices;
+            for dense layers, these are (input_neuron, output_neuron) indices. For layers not in this dict,
+            the entire layer will be treated as Bayesian. Can be automatically generated using select_bayesian_components() 
+            utility function which supports various selection methods including magnitude,
+            gradient, variance, and clustering-based approaches.
         num_classes: Number of classes for classification task
         noise_prior: Custom prior for observational noise distribution
+
+    Example:
+        # Automatically select Bayesian weights using variance-based selection
+        prob_neurons = select_bayesian_components(
+            model,
+            layer_names=['Conv0', 'Dense2'],
+            method='variance',
+            num_pairs_per_layer=2
+        )
+        
+        # Or manually specify weight connections
+        probabilistic_neurons = {
+            'Conv0': [(0, 1), (2, 3)],  # Make these input-output connections Bayesian
+            'Dense2': [(0, 5), (1, 10)]
+        }
+
+        # Note that you would typically need to make far more than 2 weights probabilistic
     """
 
     def __init__(self,
