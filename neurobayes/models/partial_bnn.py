@@ -27,6 +27,7 @@ class PartialBNN:
                  deterministic_weights: Optional[Dict[str, jnp.ndarray]] = None,
                  num_probabilistic_layers: Optional[int] = None,
                  probabilistic_layer_names: Optional[List[str]] = None,
+                 probabilistic_neurons: Optional[Dict[str, List[Tuple[int]]]] = None,
                  num_classes: Optional[int] = None,
                  noise_prior: Optional[dist.Distribution] = None
                  ) -> None:
@@ -41,6 +42,7 @@ class PartialBNN:
                 deterministic_weights=deterministic_weights,
                 num_probabilistic_layers=num_probabilistic_layers,
                 probabilistic_layer_names=probabilistic_layer_names,
+                probabilistic_neurons=probabilistic_neurons,
                 num_classes=num_classes,
                 noise_prior=noise_prior
             )
@@ -50,6 +52,7 @@ class PartialBNN:
                 deterministic_weights=deterministic_weights,
                 num_probabilistic_layers=num_probabilistic_layers,
                 probabilistic_layer_names=probabilistic_layer_names,
+                probabilistic_neurons=probabilistic_neurons,
                 num_classes=num_classes,
                 noise_prior=noise_prior
             )
@@ -59,6 +62,7 @@ class PartialBNN:
                 deterministic_weights=deterministic_weights,
                 num_probabilistic_layers=num_probabilistic_layers,
                 probabilistic_layer_names=probabilistic_layer_names,
+                probabilistic_neurons=probabilistic_neurons,
                 num_classes=num_classes,
                 noise_prior=noise_prior
             )
