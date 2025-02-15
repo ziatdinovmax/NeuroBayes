@@ -12,7 +12,7 @@ from .bnn import BNN
 from .hybrid_layers import partial_bayesian_dense
 from ..flax_nets import FlaxMLP, DeterministicNN
 from ..flax_nets import MLPLayerModule
-from ..flax_nets import extract_configs
+from ..flax_nets import extract_configs, select_bayesian_components
 from ..utils import flatten_params_dict
 
 
@@ -155,6 +155,7 @@ class PartialBayesianMLP(BNN):
             progress_bar: bool = True, device: str = None,
             rng_key: Optional[jnp.array] = None,
             extra_fields: Optional[Tuple[str, ...]] = (),
+            select_neurons_config: Optional[Dict] = None,
             **kwargs
             ) -> None:
         """
@@ -188,24 +189,68 @@ class PartialBayesianMLP(BNN):
             rng_key (Optional[jnp.ndarray], optional): Random number generator key. Defaults to None.
             extra_fields (Optional[Tuple[str, ...]], optional): Extra fields to collect during the MCMC run. 
                 Defaults to ().
+            select_neurons_config (Optional[Dict], optional): Configuration for selecting 
+                probabilistic neurons after deterministic training. Should contain:
+                - method: str - Selection method ('variance', 'gradient', etc.)
+                - layer_names: List[str] - Names of layers to make partially Bayesian
+                - num_pairs_per_layer: int - Number of weight pairs to select per layer
+                - Additional method-specific parameters
             **max_num_restarts (int, optional): Maximum number of fitting attempts for single chain. 
                 Ignored if num_chains > 1. Defaults to 1.
             **min_accept_prob (float, optional): Minimum acceptance probability threshold. 
                 Only used if num_chains = 1. Defaults to 0.55.
             **run_diagnostics (bool, optional): Run Gelman-Rubin diagnostics layer-by-layer at the end.
                 Defaults to False.
+
+            Example:
+                model.fit(
+                    X, y, num_warmup=1000, num_samples=1000,
+                    sgd_lr=1e-3, sgd_epochs=100,
+                    select_neurons_config={
+                        'method': 'variance',
+                        'layer_names': ['Dense0', 'Dense2'],
+                        'num_pairs_per_layer': 5
+                    }
+                )
         """
         if not self.deterministic_weights:
             print("Training deterministic NN...")
             X, y = self.set_data(X, y)
+            # Check if we need to collect gradients for neuron selection
+            collect_gradients = (select_neurons_config is not None and 
+                               select_neurons_config.get('method') == 'gradient')
+            
             det_nn = DeterministicNN(
                 self.deterministic_nn,
-                input_shape = X.shape[1:] if X.ndim > 2 else (X.shape[-1],), # different input shape for ConvNet and MLP
+                input_shape = X.shape[1:] if X.ndim > 2 else (X.shape[-1],),
                 loss='homoskedastic' if self.is_regression else 'classification',
-                learning_rate=sgd_lr, swa_config=swa_config, sigma=map_sigma)
+                learning_rate=sgd_lr, swa_config=swa_config, sigma=map_sigma,
+                collect_gradients=collect_gradients)
             det_nn.train(X, y, 500 if sgd_epochs is None else sgd_epochs, sgd_batch_size)
             self.deterministic_weights = det_nn.state.params
+
+            # If neuron selection config is provided, select probabilistic neurons
+            if select_neurons_config is not None:
+                print(f"Selecting probabilistic neurons using {select_neurons_config['method']} method...")
+                prob_neurons = select_bayesian_components(
+                    det_nn,  # Pass the just trained deterministic model
+                    layer_names=select_neurons_config['layer_names'],
+                    method=select_neurons_config['method'],
+                    num_pairs_per_layer=select_neurons_config['num_pairs_per_layer'],
+                    **{k: v for k, v in select_neurons_config.items() 
+                       if k not in ['method', 'layer_names', 'num_pairs_per_layer']}
+                )
+                
+                # Update layer configs with newly selected neurons
+                for config in self.layer_configs:
+                    layer_name = config['layer_name']
+                    if layer_name in prob_neurons:
+                        config['probabilistic_neurons'] = prob_neurons[layer_name]
+                    else:
+                        config['probabilistic_neurons'] = None
+
             print("Training partially Bayesian NN")
+            
         super().fit(
             X, y, num_warmup, num_samples, num_chains, chain_method,
             priors_sigma, progress_bar, device, rng_key, extra_fields, **kwargs)
