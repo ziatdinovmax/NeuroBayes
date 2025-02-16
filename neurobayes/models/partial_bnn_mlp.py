@@ -200,16 +200,16 @@ class PartialBayesianMLP(BNN):
             **run_diagnostics (bool, optional): Run Gelman-Rubin diagnostics layer-by-layer at the end.
                 Defaults to False.
 
-            Example:
-                model.fit(
-                    X, y, num_warmup=1000, num_samples=1000,
-                    sgd_lr=1e-3, sgd_epochs=100,
-                    select_neurons_config={
-                        'method': 'variance',
-                        'layer_names': ['Dense0', 'Dense2'],
-                        'num_pairs_per_layer': 5
-                    }
-                )
+        Example:
+            model.fit(
+                X, y, num_warmup=1000, num_samples=1000,
+                sgd_lr=1e-3, sgd_epochs=100,
+                select_neurons_config={
+                    'method': 'variance',
+                    'layer_names': ['Dense0', 'Dense2'],
+                    'num_pairs_per_layer': 5
+                }
+            )
         """
         if not self.deterministic_weights:
             print("Training deterministic NN...")
