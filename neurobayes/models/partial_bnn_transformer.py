@@ -10,7 +10,7 @@ from .bnn import BNN
 from .hybrid_layers import partial_bayesian_dense, partial_bayesian_embed
 from ..flax_nets import FlaxTransformer, DeterministicNN
 from ..flax_nets import MLPLayerModule, TransformerAttentionModule, EmbedModule, LayerNormModule
-from ..flax_nets import extract_configs
+from ..flax_nets import extract_configs, select_bayesian_components
 from ..utils import flatten_transformer_params_dict
 
 
@@ -239,6 +239,7 @@ class PartialBayesianTransformer(BNN):
             progress_bar: bool = True, device: str = None,
             rng_key: Optional[jnp.array] = None,
             extra_fields: Optional[Tuple[str, ...]] = (),
+            select_neurons_config: Optional[Dict] = None,
             **kwargs
             ) -> None:
         """
@@ -246,19 +247,67 @@ class PartialBayesianTransformer(BNN):
         
         Args:
             X (jnp.ndarray): Input sequences of shape (batch_size, seq_length).
-            For other parameters, see BNN.fit() documentation.
-        """
-        
+            y (jnp.ndarray): Target array. For single-output problems: 1D array of shape (n_samples,).
+                For multi-output problems: 2D array of shape (n_samples, target_dim).
+            num_warmup (int, optional): Number of NUTS warmup steps. Defaults to 2000.
+            num_samples (int, optional): Number of NUTS samples to draw. Defaults to 2000.
+            num_chains (int, optional): Number of NUTS chains to run. Defaults to 1.
+            chain_method (str, optional): Method for running chains: 'sequential', 'parallel', 
+                or 'vectorized'. Defaults to 'sequential'.
+            sgd_epochs (Optional[int], optional): Number of SGD training epochs for deterministic NN.
+                Defaults to 500 (if no pretrained weights are provided).
+            sgd_lr (float, optional): SGD learning rate. Defaults to 0.01.
+            sgd_batch_size (Optional[int], optional): Mini-batch size for SGD training. 
+                Defaults to None (all input data is processed as a single batch).
+            swa_config (dict, optional):
+                Stochastic weight averaging protocol. Defaults to averaging weights
+                at the end of training trajectory (the last 5% of SGD epochs).
+            map_sigma (float, optional): Sigma in Gaussian prior for regularized SGD training. Defaults to 1.0.
+            priors_sigma (float, optional): Standard deviation for default or pretrained priors
+                in the Bayesian part of the NN. Defaults to 1.0.
+            progress_bar (bool, optional): Show progress bar. Defaults to True.
+            device (Optional[str], optional): The device to perform computation on ('cpu', 'gpu'). 
+                Defaults to None (JAX default device).
+            rng_key (Optional[jnp.ndarray], optional): Random number generator key. Defaults to None.
+            extra_fields (Optional[Tuple[str, ...]], optional): Extra fields to collect during the MCMC run. 
+                Defaults to ().
+            select_neurons_config (Optional[Dict], optional): Configuration for selecting 
+                probabilistic neurons after deterministic training. Should contain:
+                - method: str - Selection method ('variance', 'gradient', etc.)
+                - layer_names: List[str] - Names of layers to make partially Bayesian
+                - num_pairs_per_layer: int - Number of weight pairs to select per layer
+                - Additional method-specific parameters
+            **max_num_restarts (int, optional): Maximum number of fitting attempts for single chain. 
+                Ignored if num_chains > 1. Defaults to 1.
+            **min_accept_prob (float, optional): Minimum acceptance probability threshold. 
+                Only used if num_chains = 1. Defaults to 0.55.
+            **run_diagnostics (bool, optional): Run Gelman-Rubin diagnostics layer-by-layer at the end.
+                Defaults to False.
+
+            Example:
+                model.fit(
+                    X, y, num_warmup=1000, num_samples=1000,
+                    sgd_lr=1e-3, sgd_epochs=100,
+                    select_neurons_config={
+                        'method': 'variance',
+                        'layer_names': ['TokenEmbed', 'FinalDense1'],
+                        'num_pairs_per_layer': 10
+                    }
+                )
+        """        
         if not self.deterministic_weights:
             print("Training deterministic transformer...")
             X, y = self.set_data(X, y)
+            collect_gradients = (select_neurons_config is not None and 
+                                 select_neurons_config.get('method') == 'gradient')
             det_nn = DeterministicNN(
                 self.transformer,
                 input_shape=X.shape[1:],
                 loss='homoskedastic' if self.is_regression else 'classification',
                 learning_rate=sgd_lr, 
                 swa_config=swa_config, 
-                sigma=map_sigma
+                sigma=map_sigma,
+                collect_gradients=collect_gradients
             )
             det_nn.train(
                 X, y, 
@@ -266,6 +315,27 @@ class PartialBayesianTransformer(BNN):
                 sgd_batch_size
             )
             self.deterministic_weights = det_nn.state.params
+
+            # If neuron selection config is provided, select probabilistic neurons
+            if select_neurons_config is not None:
+                print(f"Selecting probabilistic neurons using {select_neurons_config['method']} method...")
+                prob_neurons = select_bayesian_components(
+                    det_nn,  # Pass the just trained deterministic model
+                    layer_names=select_neurons_config['layer_names'],
+                    method=select_neurons_config['method'],
+                    num_pairs_per_layer=select_neurons_config['num_pairs_per_layer'],
+                    **{k: v for k, v in select_neurons_config.items() 
+                       if k not in ['method', 'layer_names', 'num_pairs_per_layer']}
+                )
+                
+                # Update layer configs with newly selected neurons
+                for config in self.layer_configs:
+                    layer_name = config['layer_name']
+                    if layer_name in prob_neurons:
+                        config['probabilistic_neurons'] = prob_neurons[layer_name]
+                    else:
+                        config['probabilistic_neurons'] = None
+
             print("Training partially Bayesian transformer")
             
         super().fit(

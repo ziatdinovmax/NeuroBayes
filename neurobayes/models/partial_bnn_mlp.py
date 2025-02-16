@@ -162,9 +162,7 @@ class PartialBayesianMLP(BNN):
         Infer parameters of the partially Bayesian MLP
 
         Args:
-            X (jnp.ndarray): Input features. For MLP: 2D array of shape (n_samples, n_features).
-                For ConvNet: N-D array of shape (n_samples, *dims, n_channels), where
-                dims = (length,) for spectral data or (height, width) for image data.
+            X (jnp.ndarray): Input features. 2D array of shape (n_samples, n_features).
             y (jnp.ndarray): Target array. For single-output problems: 1D array of shape (n_samples,).
                 For multi-output problems: 2D array of shape (n_samples, target_dim).
             num_warmup (int, optional): Number of NUTS warmup steps. Defaults to 2000.
@@ -218,11 +216,11 @@ class PartialBayesianMLP(BNN):
             X, y = self.set_data(X, y)
             # Check if we need to collect gradients for neuron selection
             collect_gradients = (select_neurons_config is not None and 
-                               select_neurons_config.get('method') == 'gradient')
+                                 select_neurons_config.get('method') == 'gradient')
             
             det_nn = DeterministicNN(
                 self.deterministic_nn,
-                input_shape = X.shape[1:] if X.ndim > 2 else (X.shape[-1],),
+                input_shape = (X.shape[-1],),
                 loss='homoskedastic' if self.is_regression else 'classification',
                 learning_rate=sgd_lr, swa_config=swa_config, sigma=map_sigma,
                 collect_gradients=collect_gradients)
