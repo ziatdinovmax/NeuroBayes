@@ -372,8 +372,8 @@ def extract_transformer_configs(
     })
     
     configs.append({
-        "features": 1,
-        "activation": nn.softmax if transformer.classification else None,
+        "features": transformer.target_dim,
+        "activation": None,
         "is_probabilistic": "FinalDense2" in (probabilistic_layers or []),
         "layer_type": "fc",
         "layer_name": "FinalDense2"

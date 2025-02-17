@@ -120,6 +120,7 @@ class FlaxTransformer(nn.Module):
     dim_feedforward: int = 1024
     activation: str = 'silu'
     dropout_rate: float = 0.1
+    target_dim: int = 1  # For classification, set this to number of classes
     classification: bool = False
     max_seq_length: int = 1024
 
@@ -152,20 +153,26 @@ class FlaxTransformer(nn.Module):
                 block_idx=i
             )(x, enable_dropout=enable_dropout)
 
-        # Pooling and final layers
-        activation_fn = nn.silu if self.activation == 'silu' else nn.tanh
+        # Pooling (using mean pooling here)
         x = jnp.mean(x, axis=1)
+
+        # Final processing layers
+        activation_fn = nn.silu if self.activation == 'silu' else nn.tanh
         x = nn.Dense(
             features=self.dim_feedforward,
             name="FinalDense1"
         )(x)
         x = activation_fn(x)
         x = nn.Dropout(rate=self.dropout_rate, deterministic=not enable_dropout)(x)
+        
+        # Final output layer
         x = nn.Dense(
-            features=1,
+            features=self.target_dim,
             name="FinalDense2"
         )(x)
+        
+        # Apply softmax for classification tasks
         if self.classification:
             x = nn.softmax(x)
-
+            
         return x
