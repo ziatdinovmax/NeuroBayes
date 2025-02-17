@@ -19,7 +19,7 @@ class DeterministicNN:
     """
     Args:
         architecture: a Flax model
-        input_shape: (n_samples, n_features) or (n_samples, *dims, n_channels)
+        input_shape: (n_features,) or (*dims, n_channels)
         loss: type of loss, 'homoskedastic' (default) or 'heteroskedastic'
         learning_rate: Initial learning rate
         map: Uses maximum a posteriori approximation
@@ -45,7 +45,10 @@ class DeterministicNN:
                  learning_rate: float = 0.01,
                  map: bool = True,
                  sigma: float = 1.0,
-                 swa_config: Optional[Dict] = None) -> None:
+                 swa_config: Optional[Dict] = None,
+                 collect_gradients: bool = False,
+                 init_random_state: Optional[int] = 0
+                 ) -> None:
         
         input_shape = (input_shape,) if isinstance(input_shape, int) else input_shape
         self.model = architecture
@@ -58,7 +61,7 @@ class DeterministicNN:
         self.loss = loss
         
         # Initialize model
-        key = jax.random.PRNGKey(0)
+        key = jax.random.PRNGKey(init_random_state)
         params = self.model.init(
             key,
             jnp.ones((1, *input_shape), dtype=input_dtype)
@@ -86,8 +89,12 @@ class DeterministicNN:
         self.learning_rate = learning_rate
         self.map = map
         self.sigma = sigma
+        self.collect_gradients = collect_gradients
 
         self.params_history = []
+        self.grad_history = []
+        self._current_epoch_grad = None
+        self._grad_count = 0
 
     @partial(jax.jit, static_argnums=(0,))
     def train_step(self, state, inputs, targets):
@@ -115,14 +122,14 @@ class DeterministicNN:
             batch_size = len(X_train)
 
         # Calculate SWA start epoch
-        start_epoch = int(epochs * self.swa_config['start_pct'])
+        self.start_epoch = int(epochs * self.swa_config['start_pct'])
         
         # Create learning rate schedule
         lr_schedule = create_swa_schedule(
             schedule_type=self.swa_config['schedule'],
             initial_lr=self.learning_rate,
             swa_lr=self.swa_config['swa_lr'],
-            start_epoch=start_epoch,
+            start_epoch=self.start_epoch,
             total_epochs=epochs,
             cycle_length=self.swa_config.get('cycle_length'),
             decay_fraction=self.swa_config.get('decay_fraction', 0.05)
@@ -134,15 +141,23 @@ class DeterministicNN:
         
         with tqdm(total=epochs, desc="Training Progress", leave=True) as pbar:
             for epoch in range(epochs):
+                collecting_grads = self.collect_gradients and epoch >= self.start_epoch
                 # Get learning rate and collection decision from schedule
                 learning_rate, should_collect = lr_schedule(epoch)
                 # Update learning rate if needed 
                 self.update_learning_rate(learning_rate)
                 
+                
                 epoch_loss = 0.0
                 for i, (X_batch, y_batch) in enumerate(zip(X_batches, y_batches)):
                     self.state, batch_loss = self.train_step(self.state, X_batch, y_batch)
+                    if collecting_grads:
+                        grads = self._get_grads(X_batch, y_batch)
+                        self._update_running_grad_average(grads)
                     epoch_loss += batch_loss
+
+                if collecting_grads:
+                    self.grad_history.append(self._current_epoch_grad)
                 
                 # Collect weights if scheduled
                 if should_collect:
@@ -159,10 +174,39 @@ class DeterministicNN:
         # Average collected weights if any were collected
         if self.params_history:
             self.state = self.state.replace(params=self.average_params())
+        
+        if self.grad_history:  # Check if we collected any gradients
+            self.average_grads = jax.tree_map(
+                lambda *epoch_grads: sum(epoch_grads) / len(epoch_grads),
+                *self.grad_history
+            )
 
     def _store_params(self, params: Dict) -> None:
         self.params_history.append(params)
 
+    def _get_grads(self, inputs, targets):
+        dropout_key = jax.random.PRNGKey(0)
+        _, grads = jax.value_and_grad(self.total_loss)(
+            self.state.params,
+            inputs,
+            targets,
+            rngs={'dropout': dropout_key}
+        )
+        return grads
+    
+    def _update_running_grad_average(self, new_grads):
+        """Update running average of gradients."""
+        if self._current_epoch_grad is None:
+            self._current_epoch_grad = new_grads
+            self._grad_count = 1
+        else:
+            # Update running average
+            self._grad_count += 1
+            self._current_epoch_grad = jax.tree_util.tree_map(
+                lambda avg, new: avg + (new - avg) / self._grad_count,
+                self._current_epoch_grad, new_grads
+            )
+    
     def average_params(self) -> Dict:
         """Average model parameters, excluding normalization layers"""
         if not self.params_history:

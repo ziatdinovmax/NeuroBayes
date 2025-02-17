@@ -27,6 +27,7 @@ class PartialBNN:
                  deterministic_weights: Optional[Dict[str, jnp.ndarray]] = None,
                  num_probabilistic_layers: Optional[int] = None,
                  probabilistic_layer_names: Optional[List[str]] = None,
+                 probabilistic_neurons: Optional[Dict[str, List[Tuple[int]]]] = None,
                  num_classes: Optional[int] = None,
                  noise_prior: Optional[dist.Distribution] = None
                  ) -> None:
@@ -41,6 +42,7 @@ class PartialBNN:
                 deterministic_weights=deterministic_weights,
                 num_probabilistic_layers=num_probabilistic_layers,
                 probabilistic_layer_names=probabilistic_layer_names,
+                probabilistic_neurons=probabilistic_neurons,
                 num_classes=num_classes,
                 noise_prior=noise_prior
             )
@@ -50,6 +52,7 @@ class PartialBNN:
                 deterministic_weights=deterministic_weights,
                 num_probabilistic_layers=num_probabilistic_layers,
                 probabilistic_layer_names=probabilistic_layer_names,
+                probabilistic_neurons=probabilistic_neurons,
                 num_classes=num_classes,
                 noise_prior=noise_prior
             )
@@ -59,6 +62,7 @@ class PartialBNN:
                 deterministic_weights=deterministic_weights,
                 num_probabilistic_layers=num_probabilistic_layers,
                 probabilistic_layer_names=probabilistic_layer_names,
+                probabilistic_neurons=probabilistic_neurons,
                 num_classes=num_classes,
                 noise_prior=noise_prior
             )
@@ -77,6 +81,7 @@ class PartialBNN:
             progress_bar: bool = True, device: str = None,
             rng_key: Optional[jnp.array] = None,
             extra_fields: Optional[Tuple[str, ...]] = (),
+            select_neurons_config: Optional[Dict] = None,
             max_num_restarts: int = 1,
             min_accept_prob: float = 0.55,
             run_diagnostics: bool = False
@@ -113,12 +118,29 @@ class PartialBNN:
             rng_key: Random number generator key. Defaults to None.
             extra_fields: Extra fields to collect during the MCMC run. 
                 Defaults to ().
+            select_neurons_config (Optional[Dict], optional): Configuration for selecting 
+                probabilistic neurons after deterministic training. Should contain:
+                - method: str - Selection method ('variance', 'gradient', etc.)
+                - layer_names: List[str] - Names of layers to make partially Bayesian
+                - num_pairs_per_layer: int - Number of weight pairs to select per layer
+                - Additional method-specific parameters
             max_num_restarts: Maximum number of fitting attempts for single chain. 
                 Ignored if num_chains > 1. Defaults to 1.
             min_accept_prob: Minimum acceptance probability threshold. 
                 Only used if num_chains = 1. Defaults to 0.55.
             run_diagnostics: Run Gelman-Rubin diagnostics layer-by-layer at the end.
                 Defaults to False.
+            
+        Example:
+            model.fit(
+                X, y, num_warmup=1000, num_samples=1000,
+                sgd_lr=1e-3, sgd_epochs=100,
+                select_neurons_config={
+                    'method': 'variance',
+                    'layer_names': ['Dense0', 'Dense2'],
+                    'num_pairs_per_layer': 5
+                }
+            )
         """
         return self._model.fit(
             X, y,
@@ -136,6 +158,7 @@ class PartialBNN:
             device=device,
             rng_key=rng_key,
             extra_fields=extra_fields,
+            select_neurons_config=select_neurons_config,
             max_num_restarts=max_num_restarts,
             min_accept_prob=min_accept_prob,
             run_diagnostics=run_diagnostics

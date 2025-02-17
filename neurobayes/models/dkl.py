@@ -7,7 +7,8 @@ import numpyro.distributions as dist
 from numpyro.contrib.module import random_flax_module
 
 from .gp import GP
-from ..flax_nets import FlaxMLP, FlaxConvNet
+from ..flax_nets.mlp import FlaxMLP
+from ..flax_nets.convnet import FlaxConvNet
 from ..utils.priors import GPPriors
 from ..utils.utils import get_flax_compatible_dict
 

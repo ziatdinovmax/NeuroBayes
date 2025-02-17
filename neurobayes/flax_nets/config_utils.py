@@ -1,10 +1,14 @@
 from typing import Dict, List
 from functools import singledispatch
+import jax
+import jax.numpy as jnp
+import numpy as np
 
 from .convnet import FlaxConvNet, FlaxConvNet2Head
 from .mlp import FlaxMLP, FlaxMLP2Head
 from .transformer import FlaxTransformer
 from .configs import extract_mlp_configs, extract_convnet_configs, extract_mlp2head_configs, extract_convnet2head_configs, extract_transformer_configs
+from ..utils import flatten_params_dict, flatten_transformer_params_dict
 
 @singledispatch
 def extract_configs(net, probabilistic_layers: List[str] = None, 
