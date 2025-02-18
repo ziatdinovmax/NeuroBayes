@@ -160,7 +160,6 @@ class PartialBayesianTransformer(BNN):
                 layer = TransformerAttentionModule(
                     num_heads=config['num_heads'],
                     qkv_features=config['qkv_features'],
-                    dropout_rate=config.get('dropout_rate', 0.1),
                     layer_name="Attention",
                     block_idx=block_idx
                 )
