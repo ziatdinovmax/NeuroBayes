@@ -229,3 +229,100 @@ def partial_bayesian_conv(x: jnp.ndarray,
         )
     
     return x
+
+
+def partial_bayesian_attention(x, pretrained_params, prob_neurons, priors_sigma, 
+                               num_heads, dropout_rate, layer_name, enable_dropout=False):
+    """
+    A partial Bayesian attention layer that updates only selected weights within the 
+    attention module's subcomponents (query, key, value, out).
+
+    Args:
+        x: Input tensor of shape (batch, seq_length, input_dim).
+        pretrained_params: Dictionary of pretrained parameters for the attention layer.
+                           Expected keys: 'query', 'key', 'value', 'out', each a dict with
+                           keys 'kernel' and 'bias'.
+        prob_neurons: A dict mapping subcomponent names (e.g. "query", "key", "value", "out")
+                      to a list of (input_idx, output_idx) tuples indicating which connections 
+                      to treat as Bayesian.
+        priors_sigma: Standard deviation for the Normal priors.
+        num_heads: Number of attention heads.
+        dropout_rate: Dropout rate to apply on attention weights (if enabled).
+        layer_name: Base name used for naming the numpyro samples.
+        enable_dropout: If True, apply dropout (you can customize dropout sampling as needed).
+        
+    Returns:
+        The attention output tensor.
+    """
+    # Get the total feature dimension (qkv_features) from the query kernel shape.
+    qkv_features = pretrained_params['query']['kernel'].shape[1]
+    head_dim = qkv_features // num_heads
+
+    def partial_dense(x, sublayer, sample_name):
+        """
+        Performs a dense operation using the pretrained weights from a given subcomponent.
+        If probabilistic indices are provided for that subcomponent, only those weight entries 
+        (and corresponding biases) are updated via sampling.
+        """
+        kernel = pretrained_params[sublayer]['kernel']
+        bias = pretrained_params[sublayer]['bias']
+        sub_prob = prob_neurons.get(sublayer, None)
+        if sub_prob is not None:
+            # Extract indices from the provided list of (input_idx, output_idx) tuples.
+            input_idx = jnp.array([i for i, _ in sub_prob])
+            output_idx = jnp.array([j for _, j in sub_prob])
+            # Get the current values for these connections.
+            prob_weight_values = kernel[input_idx, output_idx]
+            new_prob_weights = numpyro.sample(
+                f"{layer_name}_{sample_name}_kernel_prob",
+                dist.Normal(prob_weight_values, priors_sigma)
+            )
+            kernel = kernel.at[input_idx, output_idx].set(new_prob_weights)
+            # For the bias, update only the entries corresponding to the selected output indices.
+            prob_bias_values = bias[output_idx]
+            new_prob_bias = numpyro.sample(
+                f"{layer_name}_{sample_name}_bias_prob",
+                dist.Normal(prob_bias_values, priors_sigma)
+            )
+            bias = bias.at[output_idx].set(new_prob_bias)
+        # Compute the dense operation.
+        return jnp.dot(x, kernel) + bias
+
+    # Compute the projections.
+    q = partial_dense(x, 'query', 'query')
+    k = partial_dense(x, 'key', 'key')
+    v = partial_dense(x, 'value', 'value')
+
+    # Reshape the projections to multi-head format.
+    def reshape_to_heads(t):
+        batch, seq_len, _ = t.shape
+        # Reshape to (batch, seq_len, num_heads, head_dim) and then transpose to (batch, num_heads, seq_len, head_dim)
+        return t.reshape(batch, seq_len, num_heads, head_dim).transpose(0, 2, 1, 3)
+
+    q_heads = reshape_to_heads(q)
+    k_heads = reshape_to_heads(k)
+    v_heads = reshape_to_heads(v)
+
+    # Compute scaled dot–product attention.
+    scale = 1.0 / jnp.sqrt(head_dim)
+    attn_logits = jnp.einsum("bhqd, bhkd -> bhqk", q_heads, k_heads) * scale
+    attn_weights = softmax(attn_logits, axis=-1)
+    
+    if enable_dropout and dropout_rate > 0.0:
+        # (Optionally) apply dropout on attention weights.
+        # You can further customize dropout here with a proper random key.
+        dropout_mask = numpyro.sample(
+            f"{layer_name}_attn_dropout_mask",
+            dist.Bernoulli(probs=1 - dropout_rate).to_event(attn_weights.ndim)
+        )
+        attn_weights = attn_weights * dropout_mask / (1 - dropout_rate)
+    
+    # Compute the weighted sum of the values.
+    attn_output_heads = jnp.einsum("bhqk, bhkd -> bhqd", attn_weights, v_heads)
+    # Combine the heads.
+    attn_output = attn_output_heads.transpose(0, 2, 1, 3).reshape(x.shape[0], x.shape[1], qkv_features)
+
+    # Apply the output projection.
+    out = partial_dense(attn_output, 'out', 'out')
+
+    return out
