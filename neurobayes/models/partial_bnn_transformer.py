@@ -7,7 +7,7 @@ import numpyro.distributions as dist
 from numpyro.contrib.module import random_flax_module
 
 from .bnn import BNN
-from .hybrid_layers import partial_bayesian_dense, partial_bayesian_embed
+from .hybrid_layers import partial_bayesian_dense, partial_bayesian_embed, partial_bayesian_attention
 from ..flax_nets import FlaxTransformer, DeterministicNN
 from ..flax_nets import MLPLayerModule, TransformerAttentionModule, EmbedModule, LayerNormModule
 from ..flax_nets import extract_configs, select_bayesian_components
