@@ -306,7 +306,7 @@ def partial_bayesian_attention(x, pretrained_params, prob_neurons, priors_sigma,
     # Compute scaled dot–product attention.
     scale = 1.0 / jnp.sqrt(head_dim)
     attn_logits = jnp.einsum("bhqd, bhkd -> bhqk", q_heads, k_heads) * scale
-    attn_weights = softmax(attn_logits, axis=-1)
+    attn_weights = jax.nn.softmax(attn_logits, axis=-1)
     
     if enable_dropout and dropout_rate > 0.0:
         # (Optionally) apply dropout on attention weights.
