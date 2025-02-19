@@ -49,9 +49,16 @@ class PartialBayesianTransformer(BNN):
         )
 
         # Or manually specify weight connections
-        probabilistic_neurons = {
+        prob_neurons = {
             'TokenEmbed': [(0, 1), (2, 3)],  # Make these embedding-feature connections Bayesian
             'FinalDense1': [(0, 5), (1, 10)]  # Make these input-output connections Bayesian
+        }
+
+        # For attention layers:
+        prob_neurons = {
+            'Block0_Attention':
+            {'query': [(5, 0, 1), (0, 2, 2)], 'key': [(15, 3, 3), (14, 3, 0)],
+            'value': [(0, 0, 3), (1, 2, 2)], 'out': [(3, 0, 0), (3, 2, 15)] }
         }
 
         # Note that you would typically need to make far more than 2 weights probabilistic
