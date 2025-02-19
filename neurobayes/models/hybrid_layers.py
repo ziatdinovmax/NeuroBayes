@@ -233,38 +233,28 @@ def partial_bayesian_conv(x: jnp.ndarray,
 
 def partial_bayesian_attention(x, pretrained_params, prob_neurons, priors_sigma, layer_name):
     """
-    Implements a partial Bayesian attention layer assuming 3D kernels for query, key, value,
-    and output projections. The pretrained_params dictionary should have the following keys:
+    Implements a partial Bayesian attention layer compatible with Flax's MultiHeadDotProductAttention.
+    The pretrained_params dictionary should have the following keys:
       - 'query': {'kernel': ..., 'bias': ...}
       - 'key':   {'kernel': ..., 'bias': ...}
       - 'value': {'kernel': ..., 'bias': ...}
       - 'out':   {'kernel': ..., 'bias': ...}
     
-    Each kernel is assumed to have shape (in_features, num_heads, head_dim) and each bias shape
-    (num_heads, head_dim). The prob_neurons argument is a dictionary mapping each subcomponent
-    ('query', 'key', 'value', 'out') to a list of triples (input_idx, head_idx, out_idx) indicating
-    which weight entries should be updated using a Normal prior with standard deviation priors_sigma.
-    
-    If no probabilistic indices are provided for a subcomponent, the kernel and bias are used as is.
+    Args:
+        x: Input tensor of shape (batch, seq_len, in_features).
+        pretrained_params: Dictionary containing pretrained weights for attention components.
+        prob_neurons: Dictionary mapping each subcomponent to probabilistic indices.
+        priors_sigma: Standard deviation for the Normal prior.
+        layer_name: Base name for the layer.
+        
+    Returns:
+        The output of the attention layer.
     """
     
     def partial_bayesian_dense_3d(x, kernel, bias, prob_indices, priors_sigma, sample_name, layer_name):
         """
-        Applies a dense projection with a 3D kernel. If prob_indices is provided (a list of triples
-        (input_idx, head_idx, out_idx)), then only those weights and corresponding bias entries are updated
-        via sampling.
-        
-        Args:
-            x: Input tensor of shape (batch, seq_len, in_features).
-            kernel: 3D kernel of shape (in_features, num_heads, head_dim).
-            bias: 2D bias of shape (num_heads, head_dim).
-            prob_indices: List of triples specifying which connections to update.
-            priors_sigma: Standard deviation for the Normal prior.
-            sample_name: Name used to distinguish samples for this subcomponent.
-            layer_name: Base name for the layer.
-            
-        Returns:
-            The result of the dense projection: tensordot(x, kernel) + bias.
+        Applies a dense projection with a 3D kernel. If prob_indices is provided, then only
+        those weights are updated via sampling.
         """
         if prob_indices is not None:
             in_idx = jnp.array([idx[0] for idx in prob_indices])
@@ -292,7 +282,7 @@ def partial_bayesian_attention(x, pretrained_params, prob_neurons, priors_sigma,
                 bias = bias.at[out_idx].set(new_prob_bias)
         return jnp.tensordot(x, kernel, axes=([2], [0])) + bias
 
-    # Compute query, key, and value projections using the nested dense function.
+    # Compute query, key, and value projections
     q = partial_bayesian_dense_3d(
         x,
         pretrained_params['query']['kernel'],
@@ -315,30 +305,61 @@ def partial_bayesian_attention(x, pretrained_params, prob_neurons, priors_sigma,
         priors_sigma, 'value', layer_name
     )
     
-    # At this point, q, k, and v are expected to have shape (batch, seq_len, num_heads, head_dim).
-    # Transpose to shape (batch, num_heads, seq_len, head_dim) for attention computation.
+    # Transpose to shape (batch, num_heads, seq_len, head_dim) for attention computation
     q = jnp.transpose(q, (0, 2, 1, 3))
     k = jnp.transpose(k, (0, 2, 1, 3))
     v = jnp.transpose(v, (0, 2, 1, 3))
     
-    # Compute scaled dot–product attention.
+    # Compute scaled dot-product attention
     scale = 1.0 / jnp.sqrt(q.shape[-1])
     attn_logits = jnp.einsum("bhqd,bhkd->bhqk", q, k) * scale
     attn_weights = jax.nn.softmax(attn_logits, axis=-1)
     
-    # Compute the weighted sum of the values.
-    attn_output_heads = jnp.einsum("bhqk,bhkd->bhqd", attn_weights, v)
-    # Transpose back and combine heads.
-    attn_output = jnp.transpose(attn_output_heads, (0, 2, 1, 3))
-    attn_output = attn_output.reshape(x.shape[0], x.shape[1], -1)
+    # Compute the weighted sum of the values
+    attn_output = jnp.einsum("bhqk,bhkd->bhqd", attn_weights, v)
     
-    # Apply the output projection.
-    out = partial_bayesian_dense_3d(
-        attn_output,
-        pretrained_params['out']['kernel'],
-        pretrained_params['out']['bias'],
-        prob_neurons.get('out', None),
-        priors_sigma, 'out', layer_name
-    )
+    # Reshape attention output to match Flax's structure for the output projection
+    # From [batch, num_heads, seq_len, head_dim] to [batch, seq_len, num_heads*head_dim]
+    batch_size, num_heads, seq_len, head_dim = attn_output.shape
+    attn_output_reshaped = attn_output.transpose(0, 2, 1, 3).reshape(
+        batch_size, seq_len, num_heads * head_dim)
+    
+    # Reshape the output kernel to match Flax's approach
+    # For Flax, the output projection combines across both the head and feature dimensions
+    out_kernel = pretrained_params['out']['kernel']
+    out_kernel_reshaped = out_kernel.reshape(num_heads * head_dim, -1)
+    out_bias = pretrained_params['out']['bias']
+    
+    # Apply the partial Bayesian treatment to the reshaped output projection
+    if prob_neurons.get('out', None) is not None:
+        # Convert 3D indices to 2D indices for the reshaped kernel
+        out_prob_indices = []
+        for idx in prob_neurons['out']:
+            # Map (in_idx, head_idx, out_idx) to flattened index
+            in_idx, head_idx, out_idx = idx
+            flattened_in_idx = head_idx * head_dim + out_idx
+            out_prob_indices.append((flattened_in_idx, out_idx))
+            
+        # Apply Bayesian treatment to selected weights in flattened kernel
+        in_idx = jnp.array([idx[0] for idx in out_prob_indices])
+        out_idx = jnp.array([idx[1] for idx in out_prob_indices])
+        prob_vals = out_kernel_reshaped[in_idx, out_idx]
+        new_prob_vals = numpyro.sample(
+            f"{layer_name}_out_kernel_prob",
+            dist.Normal(prob_vals, priors_sigma)
+        )
+        out_kernel_reshaped = out_kernel_reshaped.at[in_idx, out_idx].set(new_prob_vals)
+        
+        # Handle bias similarly if needed
+        if out_bias.size > 0:
+            prob_bias_vals = out_bias[out_idx]
+            new_prob_bias = numpyro.sample(
+                f"{layer_name}_out_bias_prob",
+                dist.Normal(prob_bias_vals, priors_sigma)
+            )
+            out_bias = out_bias.at[out_idx].set(new_prob_bias)
+    
+    # Apply the output projection
+    out = jnp.matmul(attn_output_reshaped, out_kernel_reshaped) + out_bias
     
     return out
