@@ -165,13 +165,12 @@ class PartialBayesianTransformer(BNN):
                 )
                 if config['is_probabilistic']:
                     if config.get('probabilistic_neurons') is not None:
-                        # Use our custom partial Bayesian attention implementation.
+                        # Use custom partial Bayesian attention for neuron-level control
                         current_input = partial_bayesian_attention(
                             current_input,
                             pretrained_params=pretrained_priors[layer_name],
                             prob_neurons=config['probabilistic_neurons'],
                             priors_sigma=priors_sigma,
-                            #num_heads=config['num_heads'],
                             layer_name=layer_name,
                         )
                     else:
