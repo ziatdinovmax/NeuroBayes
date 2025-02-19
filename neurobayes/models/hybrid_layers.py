@@ -232,7 +232,7 @@ def partial_bayesian_conv(x: jnp.ndarray,
 
 
 def partial_bayesian_attention(x, pretrained_params, prob_neurons, priors_sigma, 
-                               num_heads, dropout_rate, layer_name, enable_dropout=False):
+                               num_heads, layer_name):
     """
     A partial Bayesian attention layer that updates only selected weights within the 
     attention module's subcomponents (query, key, value, out).
@@ -247,9 +247,7 @@ def partial_bayesian_attention(x, pretrained_params, prob_neurons, priors_sigma,
                       to treat as Bayesian.
         priors_sigma: Standard deviation for the Normal priors.
         num_heads: Number of attention heads.
-        dropout_rate: Dropout rate to apply on attention weights (if enabled).
         layer_name: Base name used for naming the numpyro samples.
-        enable_dropout: If True, apply dropout (you can customize dropout sampling as needed).
         
     Returns:
         The attention output tensor.
@@ -307,15 +305,6 @@ def partial_bayesian_attention(x, pretrained_params, prob_neurons, priors_sigma,
     scale = 1.0 / jnp.sqrt(head_dim)
     attn_logits = jnp.einsum("bhqd, bhkd -> bhqk", q_heads, k_heads) * scale
     attn_weights = jax.nn.softmax(attn_logits, axis=-1)
-    
-    if enable_dropout and dropout_rate > 0.0:
-        # (Optionally) apply dropout on attention weights.
-        # You can further customize dropout here with a proper random key.
-        dropout_mask = numpyro.sample(
-            f"{layer_name}_attn_dropout_mask",
-            dist.Bernoulli(probs=1 - dropout_rate).to_event(attn_weights.ndim)
-        )
-        attn_weights = attn_weights * dropout_mask / (1 - dropout_rate)
     
     # Compute the weighted sum of the values.
     attn_output_heads = jnp.einsum("bhqk, bhkd -> bhqd", attn_weights, v_heads)

@@ -173,7 +173,6 @@ class PartialBayesianTransformer(BNN):
                             priors_sigma=priors_sigma,
                             num_heads=config['num_heads'],
                             layer_name=layer_name,
-                            enable_dropout=False
                         )
                     else:
                         # Use full Bayesian attention via the random_flax_module.
