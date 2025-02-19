@@ -266,20 +266,13 @@ def partial_bayesian_attention(x, pretrained_params, prob_neurons, priors_sigma,
                 dist.Normal(prob_vals, priors_sigma)
             )
             kernel = kernel.at[in_idx, head_idx, out_idx].set(new_prob_vals)
-            if bias.ndim == 2:
-                prob_bias_vals = bias[head_idx, out_idx]
-                new_prob_bias = numpyro.sample(
-                    f"{layer_name}_{sample_name}_bias_prob",
-                    dist.Normal(prob_bias_vals, priors_sigma)
-                )
-                bias = bias.at[head_idx, out_idx].set(new_prob_bias)
-            elif bias.ndim == 1:
-                prob_bias_vals = bias[out_idx]
-                new_prob_bias = numpyro.sample(
-                    f"{layer_name}_{sample_name}_bias_prob",
-                    dist.Normal(prob_bias_vals, priors_sigma)
-                )
-                bias = bias.at[out_idx].set(new_prob_bias)
+            prob_bias_vals = bias[head_idx, out_idx]
+            new_prob_bias = numpyro.sample(
+                f"{layer_name}_{sample_name}_bias_prob",
+                dist.Normal(prob_bias_vals, priors_sigma)
+            )
+            bias = bias.at[head_idx, out_idx].set(new_prob_bias)
+           
         return jnp.tensordot(x, kernel, axes=([2], [0])) + bias
 
     # Compute query, key, and value projections
@@ -350,14 +343,12 @@ def partial_bayesian_attention(x, pretrained_params, prob_neurons, priors_sigma,
         )
         out_kernel_reshaped = out_kernel_reshaped.at[in_idx, out_idx].set(new_prob_vals)
         
-        # Handle bias similarly if needed
-        if out_bias.size > 0:
-            prob_bias_vals = out_bias[out_idx]
-            new_prob_bias = numpyro.sample(
-                f"{layer_name}_out_bias_prob",
-                dist.Normal(prob_bias_vals, priors_sigma)
-            )
-            out_bias = out_bias.at[out_idx].set(new_prob_bias)
+        prob_bias_vals = out_bias[out_idx]
+        new_prob_bias = numpyro.sample(
+            f"{layer_name}_out_bias_prob",
+            dist.Normal(prob_bias_vals, priors_sigma)
+        )
+        out_bias = out_bias.at[out_idx].set(new_prob_bias)
     
     # Apply the output projection
     out = jnp.matmul(attn_output_reshaped, out_kernel_reshaped) + out_bias
