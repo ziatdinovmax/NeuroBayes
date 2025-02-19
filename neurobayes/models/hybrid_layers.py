@@ -231,87 +231,106 @@ def partial_bayesian_conv(x: jnp.ndarray,
     return x
 
 
-def partial_bayesian_attention(x, pretrained_params, prob_neurons, priors_sigma, 
-                               num_heads, layer_name):
+def partial_bayesian_attention(x, pretrained_params, prob_neurons, priors_sigma, layer_name):
     """
-    A partial Bayesian attention layer that updates only selected weights within the 
-    attention module's subcomponents (query, key, value, out).
-
-    Args:
-        x: Input tensor of shape (batch, seq_length, input_dim).
-        pretrained_params: Dictionary of pretrained parameters for the attention layer.
-                           Expected keys: 'query', 'key', 'value', 'out', each a dict with
-                           keys 'kernel' and 'bias'.
-        prob_neurons: A dict mapping subcomponent names (e.g. "query", "key", "value", "out")
-                      to a list of (input_idx, output_idx) tuples indicating which connections 
-                      to treat as Bayesian.
-        priors_sigma: Standard deviation for the Normal priors.
-        num_heads: Number of attention heads.
-        layer_name: Base name used for naming the numpyro samples.
+    Implements a partial Bayesian attention layer assuming 3D kernels for query, key, value,
+    and output projections. The pretrained_params dictionary should have the following keys:
+      - 'query': {'kernel': ..., 'bias': ...}
+      - 'key':   {'kernel': ..., 'bias': ...}
+      - 'value': {'kernel': ..., 'bias': ...}
+      - 'out':   {'kernel': ..., 'bias': ...}
+    
+    Each kernel is assumed to have shape (in_features, num_heads, head_dim) and each bias shape
+    (num_heads, head_dim). The prob_neurons argument is a dictionary mapping each subcomponent
+    ('query', 'key', 'value', 'out') to a list of triples (input_idx, head_idx, out_idx) indicating
+    which weight entries should be updated using a Normal prior with standard deviation priors_sigma.
+    
+    If no probabilistic indices are provided for a subcomponent, the kernel and bias are used as is.
+    """
+    
+    def partial_bayesian_dense_3d(x, kernel, bias, prob_indices, priors_sigma, sample_name, layer_name):
+        """
+        Applies a dense projection with a 3D kernel. If prob_indices is provided (a list of triples
+        (input_idx, head_idx, out_idx)), then only those weights and corresponding bias entries are updated
+        via sampling.
         
-    Returns:
-        The attention output tensor.
-    """
-    # Get the total feature dimension (qkv_features) from the query kernel shape.
-    qkv_features = pretrained_params['query']['kernel'].shape[1]
-    head_dim = qkv_features // num_heads
-
-    def partial_dense(x, sublayer, sample_name):
+        Args:
+            x: Input tensor of shape (batch, seq_len, in_features).
+            kernel: 3D kernel of shape (in_features, num_heads, head_dim).
+            bias: 2D bias of shape (num_heads, head_dim).
+            prob_indices: List of triples specifying which connections to update.
+            priors_sigma: Standard deviation for the Normal prior.
+            sample_name: Name used to distinguish samples for this subcomponent.
+            layer_name: Base name for the layer.
+            
+        Returns:
+            The result of the dense projection: tensordot(x, kernel) + bias.
         """
-        Performs a dense operation using the pretrained weights from a given subcomponent.
-        If probabilistic indices are provided for that subcomponent, only those weight entries 
-        (and corresponding biases) are updated via sampling.
-        """
-        kernel = pretrained_params[sublayer]['kernel']
-        bias = pretrained_params[sublayer]['bias']
-        sub_prob = prob_neurons.get(sublayer, None)
-        if sub_prob is not None:
-            # Extract indices from the provided list of (input_idx, output_idx) tuples.
-            input_idx = jnp.array([i for i, _ in sub_prob])
-            output_idx = jnp.array([j for _, j in sub_prob])
-            # Get the current values for these connections.
-            prob_weight_values = kernel[input_idx, output_idx]
-            new_prob_weights = numpyro.sample(
+        if prob_indices is not None:
+            in_idx = jnp.array([idx[0] for idx in prob_indices])
+            head_idx = jnp.array([idx[1] for idx in prob_indices])
+            out_idx = jnp.array([idx[2] for idx in prob_indices])
+            prob_vals = kernel[in_idx, head_idx, out_idx]
+            new_prob_vals = numpyro.sample(
                 f"{layer_name}_{sample_name}_kernel_prob",
-                dist.Normal(prob_weight_values, priors_sigma)
+                dist.Normal(prob_vals, priors_sigma)
             )
-            kernel = kernel.at[input_idx, output_idx].set(new_prob_weights)
-            # For the bias, update only the entries corresponding to the selected output indices.
-            prob_bias_values = bias[output_idx]
+            kernel = kernel.at[in_idx, head_idx, out_idx].set(new_prob_vals)
+            prob_bias_vals = bias[head_idx, out_idx]
             new_prob_bias = numpyro.sample(
                 f"{layer_name}_{sample_name}_bias_prob",
-                dist.Normal(prob_bias_values, priors_sigma)
+                dist.Normal(prob_bias_vals, priors_sigma)
             )
-            bias = bias.at[output_idx].set(new_prob_bias)
-        # Compute the dense operation.
-        return jnp.dot(x, kernel) + bias
+            bias = bias.at[head_idx, out_idx].set(new_prob_bias)
+        return jnp.tensordot(x, kernel, axes=([2], [0])) + bias
 
-    # Compute the projections.
-    q = partial_dense(x, 'query', 'query')
-    k = partial_dense(x, 'key', 'key')
-    v = partial_dense(x, 'value', 'value')
-
-    # Reshape the projections to multi-head format.
-    def reshape_to_heads(t):
-        batch, seq_len, _ = t.shape
-        # Reshape to (batch, seq_len, num_heads, head_dim) and then transpose to (batch, num_heads, seq_len, head_dim)
-        return t.reshape(batch, seq_len, num_heads, head_dim).transpose(0, 2, 1, 3)
-
-    q_heads = reshape_to_heads(q)
-    k_heads = reshape_to_heads(k)
-    v_heads = reshape_to_heads(v)
-
+    # Compute query, key, and value projections using the nested dense function.
+    q = partial_bayesian_dense_3d(
+        x,
+        pretrained_params['query']['kernel'],
+        pretrained_params['query']['bias'],
+        prob_neurons.get('query', None),
+        priors_sigma, 'query', layer_name
+    )
+    k = partial_bayesian_dense_3d(
+        x,
+        pretrained_params['key']['kernel'],
+        pretrained_params['key']['bias'],
+        prob_neurons.get('key', None),
+        priors_sigma, 'key', layer_name
+    )
+    v = partial_bayesian_dense_3d(
+        x,
+        pretrained_params['value']['kernel'],
+        pretrained_params['value']['bias'],
+        prob_neurons.get('value', None),
+        priors_sigma, 'value', layer_name
+    )
+    
+    # At this point, q, k, and v are expected to have shape (batch, seq_len, num_heads, head_dim).
+    # Transpose to shape (batch, num_heads, seq_len, head_dim) for attention computation.
+    q = jnp.transpose(q, (0, 2, 1, 3))
+    k = jnp.transpose(k, (0, 2, 1, 3))
+    v = jnp.transpose(v, (0, 2, 1, 3))
+    
     # Compute scaled dot–product attention.
-    scale = 1.0 / jnp.sqrt(head_dim)
-    attn_logits = jnp.einsum("bhqd, bhkd -> bhqk", q_heads, k_heads) * scale
+    scale = 1.0 / jnp.sqrt(q.shape[-1])
+    attn_logits = jnp.einsum("bhqd,bhkd->bhqk", q, k) * scale
     attn_weights = jax.nn.softmax(attn_logits, axis=-1)
     
     # Compute the weighted sum of the values.
-    attn_output_heads = jnp.einsum("bhqk, bhkd -> bhqd", attn_weights, v_heads)
-    # Combine the heads.
-    attn_output = attn_output_heads.transpose(0, 2, 1, 3).reshape(x.shape[0], x.shape[1], qkv_features)
-
+    attn_output_heads = jnp.einsum("bhqk,bhkd->bhqd", attn_weights, v)
+    # Transpose back and combine heads.
+    attn_output = jnp.transpose(attn_output_heads, (0, 2, 1, 3))
+    attn_output = attn_output.reshape(x.shape[0], x.shape[1], -1)
+    
     # Apply the output projection.
-    out = partial_dense(attn_output, 'out', 'out')
-
+    out = partial_bayesian_dense_3d(
+        attn_output,
+        pretrained_params['out']['kernel'],
+        pretrained_params['out']['bias'],
+        prob_neurons.get('out', None),
+        priors_sigma, 'out', layer_name
+    )
+    
     return out
