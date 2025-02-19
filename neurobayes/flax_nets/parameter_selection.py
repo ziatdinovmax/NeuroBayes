@@ -373,6 +373,154 @@ def _select_by_gradient_conv(
     return channel_pairs
 
 
+def select_bayesian_attention_weights(
+    weights: Dict[str, Dict[str, jnp.ndarray]],
+    method: Union[str, SelectionMethod],
+    num_pairs: int = 100,
+    grads: Optional[Dict[str, Dict[str, jnp.ndarray]]] = None,
+    param_history: Optional[Dict[str, Dict[str, jnp.ndarray]]] = None,
+    threshold: Optional[float] = None,
+    n_clusters: int = 10,
+) -> Dict[str, List[Tuple[int, int, int]]]:
+    """
+    Select weights for Bayesian treatment in attention layers.
+    
+    Args:
+        weights: Dictionary of attention weights with components 'query', 'key', 'value', 'out'
+        method: Selection method (magnitude, gradient, variance, clustering)
+        num_pairs: Number of weight triplets to select per component
+        grads: Gradients for each component (required for gradient method)
+        param_history: Parameter history (required for variance method)
+        threshold: Optional magnitude threshold
+        n_clusters: Number of clusters for clustering method
+        
+    Returns:
+        Dictionary mapping each component to a list of (input_idx, head_idx, feature_idx) tuples
+    """
+    if isinstance(method, str):
+        method = SelectionMethod(method.lower())
+    
+    result = {}
+    components = ['query', 'key', 'value', 'out']
+    pairs_per_component = num_pairs // len(components)
+    
+    for component in components:
+        component_weights = weights[component]['kernel']
+        
+        if method == SelectionMethod.MAGNITUDE:
+            result[component] = _select_attention_by_magnitude(
+                component_weights, pairs_per_component, threshold)
+        elif method == SelectionMethod.GRADIENT:
+            if grads is None:
+                raise ValueError("grads must be provided for gradient-based selection")
+            component_grads = grads[component]['kernel']
+            result[component] = _select_attention_by_gradient(
+                component_grads, pairs_per_component)
+        elif method == SelectionMethod.VARIANCE:
+            if param_history is None:
+                raise ValueError("param_history must be provided for variance-based selection")
+            component_history = param_history[component]['kernel']
+            result[component] = _select_attention_by_variance(
+                component_history, pairs_per_component)
+        elif method == SelectionMethod.CLUSTERING:
+            result[component] = _select_attention_by_clustering(
+                component_weights, n_clusters, pairs_per_component // n_clusters)
+        else:
+            raise ValueError(f"Unknown method: {method}")
+            
+    return result
+
+def _select_attention_by_magnitude(
+    weights: jnp.ndarray,
+    num_pairs: int,
+    threshold: Optional[float] = None
+) -> List[Tuple[int, int, int]]:
+    """Select triplets based on weight magnitude for 3D attention weights."""
+    magnitudes = jnp.abs(weights)
+    
+    if threshold is not None:
+        indices = jnp.where(magnitudes > threshold)
+        triplets = list(zip(indices[0].tolist(), indices[1].tolist(), indices[2].tolist()))
+        if len(triplets) > num_pairs:
+            magnitudes_flat = magnitudes.ravel()
+            selected_indices = np.argsort(magnitudes_flat)[-num_pairs:]
+            rows, heads, feats = np.unravel_index(selected_indices, weights.shape)
+            triplets = list(zip(rows.tolist(), heads.tolist(), feats.tolist()))
+    else:
+        magnitudes_flat = magnitudes.ravel()
+        selected_indices = np.argsort(magnitudes_flat)[-num_pairs:]
+        rows, heads, feats = np.unravel_index(selected_indices, weights.shape)
+        triplets = list(zip(rows.tolist(), heads.tolist(), feats.tolist()))
+    
+    return triplets
+
+def _select_attention_by_variance(
+    weight_history: jnp.ndarray,
+    num_pairs: int
+) -> List[Tuple[int, int, int]]:
+    """Select triplets based on weight variance for 3D attention weights."""
+    # Compute variance across the history dimension
+    variances = jnp.var(weight_history, axis=0)
+    
+    # Select top-k by variance magnitude
+    var_flat = variances.ravel()
+    selected_indices = np.argsort(var_flat)[-num_pairs:]
+    rows, heads, feats = np.unravel_index(selected_indices, variances.shape)
+    triplets = list(zip(rows.tolist(), heads.tolist(), feats.tolist()))
+    
+    return triplets
+
+def _select_attention_by_gradient(
+    grads: jnp.ndarray,
+    num_pairs: int
+) -> List[Tuple[int, int, int]]:
+    """Select triplets based on gradient magnitude for 3D attention weights."""
+    grad_magnitudes = jnp.abs(grads)
+    
+    # Select top-k by gradient magnitude
+    grad_flat = grad_magnitudes.ravel()
+    selected_indices = np.argsort(grad_flat)[-num_pairs:]
+    rows, heads, feats = np.unravel_index(selected_indices, grads.shape)
+    triplets = list(zip(rows.tolist(), heads.tolist(), feats.tolist()))
+    
+    return triplets
+
+def _select_attention_by_clustering(
+    weights: jnp.ndarray,
+    n_clusters: int,
+    num_pairs_per_cluster: int
+) -> List[Tuple[int, int, int]]:
+    """Select triplets using clustering approach for 3D attention weights."""
+    input_dim, num_heads, head_dim = weights.shape
+    
+    # Reshape to 2D for clustering
+    weights_2d = weights.reshape(input_dim, -1)
+    weights_np = np.array(weights_2d)
+    
+    kmeans = KMeans(n_clusters=n_clusters)
+    clusters = kmeans.fit_predict(weights_np)
+    
+    triplets = []
+    for cluster_idx in range(n_clusters):
+        # Get input indices in this cluster
+        input_indices = np.where(clusters == cluster_idx)[0]
+        
+        if len(input_indices) > 0:
+            # Select random input indices from this cluster
+            selected_inputs = np.random.choice(
+                input_indices,
+                size=min(num_pairs_per_cluster, len(input_indices))
+            )
+            
+            # For each selected input, pick a random head and feature
+            for input_idx in selected_inputs:
+                head_idx = np.random.randint(0, num_heads)
+                feat_idx = np.random.randint(0, head_dim)
+                triplets.append((int(input_idx), int(head_idx), int(feat_idx)))
+    
+    return triplets
+
+
 def select_bayesian_components(
     model,
     layer_names: Union[str, List[str]],
@@ -384,7 +532,7 @@ def select_bayesian_components(
 ) -> Dict[str, List[tuple]]:
     """
     Select weight pairs for Bayesian treatment from multiple layers.
-    Supports dense, embedding, 1D conv, and 2D conv layers.
+    Supports dense, embedding, 1D conv, 2D conv, and attention layers.
     Uses model's stored gradients when gradient-based selection is chosen.
     """
     # Convert single layer name to list
@@ -417,59 +565,111 @@ def select_bayesian_components(
         if layer_name not in params:
             raise ValueError(f"Layer {layer_name} not found in model parameters")
         
-        # Determine layer type and get weights
-        is_embedding = 'embed' in layer_name.lower()
-        param_key = 'embedding' if is_embedding else 'kernel'
-        
-        weights = params[layer_name][param_key]
-        weight_dims = len(weights.shape)
-        
-        # Determine layer type based on weight dimensions
-        if weight_dims == 2:
-            layer_type = 'embedding' if is_embedding else 'dense'
-        elif weight_dims in [3, 4]:
-            layer_type = 'conv1d' if weight_dims == 3 else 'conv2d'
-        else:
-            raise ValueError(f"Unexpected weight dimensions: {weight_dims}")
-        
-        # Prepare layer-specific parameters
-        layer_params = {
-            'weights': weights,
-            'method': method,
-            'layer_type': layer_type,
-            'num_pairs': num_pairs_per_layer,
-            'threshold': threshold,
-            'n_clusters': n_clusters
-        }
-        
-        # Add method-specific parameters
-        if method == SelectionMethod.GRADIENT:
-            layer_grads = grads[layer_name][param_key]
-            layer_params['grads'] = layer_grads
+        # Check if this is an attention layer
+        is_attention = False
+        if 'attention' in params[layer_name] or any(k in ['query', 'key', 'value', 'out'] for k in params[layer_name]):
+            is_attention = True
             
-        elif method == SelectionMethod.VARIANCE:
-            # Flatten each params dict in the history
-            layer_param_history = jnp.stack([
-                flatten_fn(params)[layer_name][param_key]
-                for params in model.params_history
-            ])
-            layer_params['param_history'] = layer_param_history
-        
-        # Add embedding-specific parameters
-        if is_embedding and param_info and 'token_frequencies' in param_info:
-            layer_params['token_frequencies'] = param_info['token_frequencies'].get(layer_name)
-        
-        # Select pairs based on layer type
-        try:
-            if layer_type in ['conv1d', 'conv2d']:
-                pairs = select_bayesian_weights_conv(**layer_params)
+        if is_attention:
+            # Handle attention layer
+            attention_params = {}
+            
+            # Get attention components
+            if 'attention' in params[layer_name]:
+                attention_weights = params[layer_name]['attention']
             else:
-                pairs = select_bayesian_weights(**layer_params)
+                attention_weights = params[layer_name]
                 
-            bayesian_components[layer_name] = pairs
+            # Prepare method-specific parameters
+            if method == SelectionMethod.GRADIENT:
+                attention_grads = grads[layer_name].get('attention', grads[layer_name])
+                attention_params['grads'] = attention_grads
+                
+            elif method == SelectionMethod.VARIANCE:
+                # Collect parameter history for attention components
+                attention_history = {}
+                for component in ['query', 'key', 'value', 'out']:
+                    component_history = []
+                    for params_snapshot in model.params_history:
+                        flat_params = flatten_fn(params_snapshot)
+                        if 'attention' in flat_params[layer_name]:
+                            component_weights = flat_params[layer_name]['attention'][component]['kernel']
+                        else:
+                            component_weights = flat_params[layer_name][component]['kernel']
+                        component_history.append(component_weights)
+                    attention_history[component] = {'kernel': jnp.stack(component_history)}
+                attention_params['param_history'] = attention_history
             
-        except Exception as e:
-            print(f"Warning: Failed to process layer {layer_name}: {str(e)}")
-            continue
+            # Call attention-specific selection function
+            try:
+                triplets = select_bayesian_attention_weights(
+                    weights=attention_weights,
+                    method=method,
+                    num_pairs=num_pairs_per_layer,
+                    threshold=threshold,
+                    n_clusters=n_clusters,
+                    **{k: v for k, v in attention_params.items() if v is not None}
+                )
+                bayesian_components[layer_name] = triplets
+            except Exception as e:
+                print(f"Warning: Failed to process attention layer {layer_name}: {str(e)}")
+                continue
+                
+        else:
+            # Handle other layer types (dense, embedding, conv)
+            # Determine layer type and get weights
+            is_embedding = 'embed' in layer_name.lower()
+            param_key = 'embedding' if is_embedding else 'kernel'
+            
+            weights = params[layer_name][param_key]
+            weight_dims = len(weights.shape)
+            
+            # Determine layer type based on weight dimensions
+            if weight_dims == 2:
+                layer_type = 'embedding' if is_embedding else 'dense'
+            elif weight_dims in [3, 4]:
+                layer_type = 'conv1d' if weight_dims == 3 else 'conv2d'
+            else:
+                raise ValueError(f"Unexpected weight dimensions: {weight_dims}")
+            
+            # Prepare layer-specific parameters
+            layer_params = {
+                'weights': weights,
+                'method': method,
+                'layer_type': layer_type,
+                'num_pairs': num_pairs_per_layer,
+                'threshold': threshold,
+                'n_clusters': n_clusters
+            }
+            
+            # Add method-specific parameters
+            if method == SelectionMethod.GRADIENT:
+                layer_grads = grads[layer_name][param_key]
+                layer_params['grads'] = layer_grads
+                
+            elif method == SelectionMethod.VARIANCE:
+                # Flatten each params dict in the history
+                layer_param_history = jnp.stack([
+                    flatten_fn(params)[layer_name][param_key]
+                    for params in model.params_history
+                ])
+                layer_params['param_history'] = layer_param_history
+            
+            # Add embedding-specific parameters
+            if is_embedding and param_info and 'token_frequencies' in param_info:
+                layer_params['token_frequencies'] = param_info['token_frequencies'].get(layer_name)
+            
+            # Select pairs based on layer type
+            try:
+                if layer_type in ['conv1d', 'conv2d']:
+                    pairs = select_bayesian_weights_conv(**layer_params)
+                else:
+                    pairs = select_bayesian_weights(**layer_params)
+                    
+                bayesian_components[layer_name] = pairs
+                
+            except Exception as e:
+                print(f"Warning: Failed to process layer {layer_name}: {str(e)}")
+                continue
     
     return bayesian_components

@@ -7,7 +7,7 @@ import numpyro.distributions as dist
 from numpyro.contrib.module import random_flax_module
 
 from .bnn import BNN
-from .hybrid_layers import partial_bayesian_dense, partial_bayesian_embed
+from .hybrid_layers import partial_bayesian_dense, partial_bayesian_embed, partial_bayesian_attention
 from ..flax_nets import FlaxTransformer, DeterministicNN
 from ..flax_nets import MLPLayerModule, TransformerAttentionModule, EmbedModule, LayerNormModule
 from ..flax_nets import extract_configs, select_bayesian_components
@@ -153,26 +153,36 @@ class PartialBayesianTransformer(BNN):
                     current_input = token_embedding + pos_embedding
                 
             elif layer_type == "attention":
-                # Save input for residual
+                # Save input for the residual connection.
                 residual = current_input
-                
+            
                 block_idx = int(layer_name.split('_')[0][5:])
                 layer = TransformerAttentionModule(
                     num_heads=config['num_heads'],
                     qkv_features=config['qkv_features'],
-                    dropout_rate=config.get('dropout_rate', 0.1),
                     layer_name="Attention",
                     block_idx=block_idx
                 )
                 if config['is_probabilistic']:
-                    net = random_flax_module(layer_name, layer,
-                                        input_shape=(1, *current_input.shape[1:]), prior=prior)
-                    current_input = net(current_input, enable_dropout=False)
+                    if config.get('probabilistic_neurons') is not None:
+                        # Use custom partial Bayesian attention for neuron-level control
+                        current_input = partial_bayesian_attention(
+                            current_input,
+                            pretrained_params=pretrained_priors[layer_name],
+                            prob_neurons=config['probabilistic_neurons'],
+                            priors_sigma=priors_sigma,
+                            layer_name=layer_name,
+                        )
+                    else:
+                        # Use full Bayesian attention via the random_flax_module.
+                        net = random_flax_module(layer_name, layer,
+                                                 input_shape=(1, *current_input.shape[1:]), prior=prior)
+                        current_input = net(current_input, enable_dropout=False)
                 else:
                     params = {"params": {f"Block{block_idx}_Attention": pretrained_priors[layer_name]}}
                     current_input = layer.apply(params, current_input, enable_dropout=False)
-                
-                # Add residual after attention
+            
+                # Add the residual connection.
                 current_input = current_input + residual
                 
             elif layer_type == "layernorm":
