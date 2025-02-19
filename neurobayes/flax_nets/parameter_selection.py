@@ -384,51 +384,47 @@ def select_bayesian_attention_weights(
 ) -> Dict[str, List[Tuple[int, int, int]]]:
     """
     Select weights for Bayesian treatment in attention layers.
-    
-    Args:
-        weights: Dictionary of attention weights with components 'query', 'key', 'value', 'out'
-        method: Selection method (magnitude, gradient, variance, clustering)
-        num_pairs: Number of weight triplets to select per component
-        grads: Gradients for each component (required for gradient method)
-        param_history: Parameter history (required for variance method)
-        threshold: Optional magnitude threshold
-        n_clusters: Number of clusters for clustering method
-        
-    Returns:
-        Dictionary mapping each component to a list of (input_idx, head_idx, feature_idx) tuples
     """
     if isinstance(method, str):
         method = SelectionMethod(method.lower())
     
     result = {}
-    components = ['query', 'key', 'value', 'out']
-    pairs_per_component = num_pairs // len(components)
+    components = [k for k in weights.keys() if k in ['query', 'key', 'value', 'out']]
+    
+    if not components:
+        raise ValueError(f"No valid attention components found in weights: {list(weights.keys())}")
+    
+    # Use the full num_pairs for EACH component
+    pairs_per_component = num_pairs
     
     for component in components:
+        if 'kernel' not in weights[component]:
+            continue
+            
         component_weights = weights[component]['kernel']
         
         if method == SelectionMethod.MAGNITUDE:
             result[component] = _select_attention_by_magnitude(
                 component_weights, pairs_per_component, threshold)
         elif method == SelectionMethod.GRADIENT:
-            if grads is None:
-                raise ValueError("grads must be provided for gradient-based selection")
+            if grads is None or component not in grads or 'kernel' not in grads[component]:
+                continue
             component_grads = grads[component]['kernel']
             result[component] = _select_attention_by_gradient(
                 component_grads, pairs_per_component)
         elif method == SelectionMethod.VARIANCE:
-            if param_history is None:
-                raise ValueError("param_history must be provided for variance-based selection")
+            if param_history is None or component not in param_history or 'kernel' not in param_history[component]:
+                continue
             component_history = param_history[component]['kernel']
             result[component] = _select_attention_by_variance(
                 component_history, pairs_per_component)
         elif method == SelectionMethod.CLUSTERING:
             result[component] = _select_attention_by_clustering(
-                component_weights, n_clusters, pairs_per_component // n_clusters)
-        else:
-            raise ValueError(f"Unknown method: {method}")
-            
+                component_weights, n_clusters, 
+                max(1, pairs_per_component // n_clusters))
+    
     return result
+    
 
 def _select_attention_by_magnitude(
     weights: jnp.ndarray,
@@ -571,6 +567,11 @@ def select_bayesian_components(
             is_attention = True
             
         if is_attention:
+            # For attention layers, we divide num_pairs_per_layer among components
+            # Each component will get num_pairs_per_component pairs
+            num_components = 4  # query, key, value, out
+            num_pairs_per_component = max(1, num_pairs_per_layer // num_components)
+            
             # Handle attention layer
             attention_params = {}
             
@@ -589,15 +590,22 @@ def select_bayesian_components(
                 # Collect parameter history for attention components
                 attention_history = {}
                 for component in ['query', 'key', 'value', 'out']:
+                    if component not in attention_weights:
+                        continue
                     component_history = []
                     for params_snapshot in model.params_history:
                         flat_params = flatten_fn(params_snapshot)
+                        if layer_name not in flat_params:
+                            continue
                         if 'attention' in flat_params[layer_name]:
-                            component_weights = flat_params[layer_name]['attention'][component]['kernel']
-                        else:
+                            if component in flat_params[layer_name]['attention']:
+                                component_weights = flat_params[layer_name]['attention'][component]['kernel']
+                                component_history.append(component_weights)
+                        elif component in flat_params[layer_name]:
                             component_weights = flat_params[layer_name][component]['kernel']
-                        component_history.append(component_weights)
-                    attention_history[component] = {'kernel': jnp.stack(component_history)}
+                            component_history.append(component_weights)
+                    if component_history:
+                        attention_history[component] = {'kernel': jnp.stack(component_history)}
                 attention_params['param_history'] = attention_history
             
             # Call attention-specific selection function
@@ -605,7 +613,7 @@ def select_bayesian_components(
                 triplets = select_bayesian_attention_weights(
                     weights=attention_weights,
                     method=method,
-                    num_pairs=num_pairs_per_layer,
+                    num_pairs=num_pairs_per_component,  # Pass the per-component count
                     threshold=threshold,
                     n_clusters=n_clusters,
                     **{k: v for k, v in attention_params.items() if v is not None}
@@ -614,7 +622,7 @@ def select_bayesian_components(
             except Exception as e:
                 print(f"Warning: Failed to process attention layer {layer_name}: {str(e)}")
                 continue
-                
+
         else:
             # Handle other layer types (dense, embedding, conv)
             # Determine layer type and get weights
