@@ -276,12 +276,20 @@ def partial_bayesian_attention(x, pretrained_params, prob_neurons, priors_sigma,
                 dist.Normal(prob_vals, priors_sigma)
             )
             kernel = kernel.at[in_idx, head_idx, out_idx].set(new_prob_vals)
-            prob_bias_vals = bias[head_idx, out_idx]
-            new_prob_bias = numpyro.sample(
-                f"{layer_name}_{sample_name}_bias_prob",
-                dist.Normal(prob_bias_vals, priors_sigma)
-            )
-            bias = bias.at[head_idx, out_idx].set(new_prob_bias)
+            if bias.ndim == 2:
+                prob_bias_vals = bias[head_idx, out_idx]
+                new_prob_bias = numpyro.sample(
+                    f"{layer_name}_{sample_name}_bias_prob",
+                    dist.Normal(prob_bias_vals, priors_sigma)
+                )
+                bias = bias.at[head_idx, out_idx].set(new_prob_bias)
+            elif bias.ndim == 1:
+                prob_bias_vals = bias[out_idx]
+                new_prob_bias = numpyro.sample(
+                    f"{layer_name}_{sample_name}_bias_prob",
+                    dist.Normal(prob_bias_vals, priors_sigma)
+                )
+                bias = bias.at[out_idx].set(new_prob_bias)
         return jnp.tensordot(x, kernel, axes=([2], [0])) + bias
 
     # Compute query, key, and value projections using the nested dense function.
