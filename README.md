@@ -34,7 +34,7 @@ posterior_mean, posterior_var = model.predict(X_domain)
 ```
 
 ### Partially Bayesian Neural Network
-Partially Bayesian Neural Networks replace constant weights with probabilistic distributions only in a subset of the network's layers. This approach ismore computationally efficient while still providing good uncertainty estimates. By default, the deterministic part of PBNNs is trained using Maximum A Posteriori approximation, with stochastic weight averaging applied at the end of each training trajectory.
+Partially Bayesian Neural Networks replace constant weights with probabilistic distributions only in a subset of the network's layers. This approach is more computationally efficient while still providing good uncertainty estimates. By default, the deterministic part of PBNNs is trained using Maximum A Posteriori approximation, with stochastic weight averaging applied at the end of each training trajectory.
 
 ```python3
 # Number of probabilistic ('Bayesian') layers
@@ -48,7 +48,7 @@ model.fit(X_measured, y_measured, num_warmup=1000, num_samples=1000)
 posterior_mean, posterior_var = model.predict(X_domain)
 ```
 
-Alternatively, we can specify directly the names of the layers we want to be probabilistic
+Alternatively, we can specify directly the names of the layers we want to be probabilistic. NeuroBayes has a utility function called print_layer_configs() that displays the names/specs for all the layers in your architecture.
 
 ```python3
 # Specify the names of probabilistic layers (output layer, 'Dense4', needs to be specified explicitly)
