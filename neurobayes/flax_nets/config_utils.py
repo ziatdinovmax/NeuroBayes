@@ -42,7 +42,7 @@ def _(net: FlaxTransformer, probabilistic_layers: List[str] = None,
 
 def get_configs(model, pretty_print: bool = True) -> List[Dict]:
     """
-    Get basic layer configurations using the existing extract_configs function.
+    Get basic layer configurations using the extract_configs function.
     
     Args:
         model: The neural network model (FlaxMLP, FlaxConvNet, etc.)
@@ -53,20 +53,21 @@ def get_configs(model, pretty_print: bool = True) -> List[Dict]:
     """
     configs = extract_configs(model, probabilistic_layers=['None'])
     
-    # Keep only essential fields
-    essential_fields = [
-        'layer_name',
-        'layer_type',
-        'features',
-        'num_embeddings'
-    ]
-    
     # Function to simplify config dict
     def simplify_config(config: Dict) -> OrderedDict:
         ordered = OrderedDict()
-        for field in essential_fields:
-            if field in config:
-                ordered[field] = config[field]
+        ordered['layer_name'] = config['layer_name']
+        ordered['layer_type'] = config['layer_type']
+        
+        # Handle features field based on layer type
+        if config['layer_type'] == 'attention':
+            ordered['features'] = config.get('qkv_features')
+        else:
+            ordered['features'] = config.get('features')
+            
+        if 'num_embeddings' in config:
+            ordered['num_embeddings'] = config['num_embeddings']
+            
         return ordered
     
     # Simplify configs
