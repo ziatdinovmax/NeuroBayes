@@ -19,12 +19,11 @@ class VIGP(GP):
     """
 
     def __init__(self,
-                 input_dim: int,
                  kernel: kernel_fn_type,
                  priors: Optional[GPPriors] = None,
                  jitter: float = 1e-6
                  ) -> None:
-        super(VIGP, self).__init__(input_dim, kernel, priors, jitter)
+        super(VIGP, self).__init__(kernel, priors, jitter)
 
     def fit(self, X: jnp.ndarray, y: jnp.ndarray,
             num_steps: int = 1000, step_size: float = 5e-3,
