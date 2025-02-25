@@ -29,8 +29,8 @@ NeuroBayes offers several types of models:
 - [Bayesian Neural Networks](models/bnn.md) - Fully Bayesian treatment of neural networks
 - [Partially Bayesian Neural Networks](models/partial_bnn.md) - Selective Bayesian treatment for efficiency
 - [Heteroskedastic Models](models/heteroskedastic.md) - Models with input-dependent noise
-- [Gaussian Processes](models/gaussian_processes.md) - For GP regression with uncertainty estimation
-- [Deep Kernel Learning](models/deep_kernel_learning.md) - Combining neural networks with Gaussian processes
+- [Gaussian Processes](models/gp.md) - For GP regression with uncertainty estimation
+- [Deep Kernel Learning](models/dkl.md) - Combining neural networks with Gaussian processes
 
 
 ## Networks
