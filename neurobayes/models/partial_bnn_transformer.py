@@ -318,7 +318,7 @@ class PartialBayesianTransformer(BNN):
             collect_gradients = (select_neurons_config is not None and 
                                  select_neurons_config.get('method') == 'gradient')
             det_nn = DeterministicNN(
-                self.transformer,
+                self.deterministic_nn,
                 input_shape=X.shape[1:],
                 loss='homoskedastic' if self.is_regression else 'classification',
                 learning_rate=sgd_lr, 
