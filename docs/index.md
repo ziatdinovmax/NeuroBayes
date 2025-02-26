@@ -40,9 +40,3 @@ Currently, NeuroBayes supports multiple neural network architectures, with more 
 - [MLP](networks/mlp.md) - Multi-layer perceptrons for tabular data
 - [ConvNet](networks/convnet.md) - Convolutional networks for structured data
 - [Transformer](networks/transformer.md) - Transformer architectures for sequential data
-
-## Examples
-
-- [Regression with Uncertainty](examples/regression.md) - Uncertainty quantification in regression
-- [Classification](examples/classification.md) - Bayesian classification with uncertainty
-- [Selective Bayesian Components](examples/selective_bayesian.md) - Using partial Bayesian approaches
