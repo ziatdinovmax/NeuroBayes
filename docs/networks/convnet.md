@@ -1,6 +1,3 @@
-Now, let's create `convnet.md`:
-
-```markdown
 ---
 layout: default
 title: ConvNet Architectures

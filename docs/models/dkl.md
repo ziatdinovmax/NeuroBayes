@@ -1,4 +1,3 @@
-```markdown
 ---
 layout: default
 title: Deep Kernel Learning
