@@ -11,7 +11,7 @@ Machine learning, at its core, is about approximating unknown functions – mapp
 
 
 ## How to use
-NeuroBayes provides two main approaches for implementing Bayesian Neural Networks: Fully Bayesian Neural Networks (BNN) and Partially Bayesian Neural Networks (PBNN). Both approaches currently support MLP and ConvNet architectures, with more architectures on the way. Here's how to use BNN and PBNN:
+NeuroBayes provides two main approaches for implementing Bayesian Neural Networks: Fully Bayesian Neural Networks (BNN) and Partially Bayesian Neural Networks (PBNN). Both approaches currently support MLP, ConvNet, and standard Transformer architectures, with more architectures on the way. Here's how to use BNN and PBNN:
 
 ![NN_types](https://github.com/user-attachments/assets/9b58d9ec-cb7f-49de-aa58-e75990b08b83)
 
