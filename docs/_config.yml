@@ -1,0 +1,30 @@
+remote_theme: pmarsceill/just-the-docs
+
+title: NeuroBayes
+description: Bayesian and Partially Bayesian Neural Networks in JAX
+baseurl: "/NeuroBayes"
+url: "https://ziatdinovmax.github.io"
+
+# Aux links for the upper right navigation
+aux_links:
+  "NeuroBayes on GitHub":
+    - "//github.com/ziatdinovmax/NeuroBayes"
+
+# Color scheme
+color_scheme: light
+
+# Enable search
+search_enabled: true
+
+# Heading anchor links
+heading_anchors: true
+
+# Exclude files from processing
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor/bundle/
+  - vendor/cache/
+  - vendor/gems/
+  - vendor/ruby/
