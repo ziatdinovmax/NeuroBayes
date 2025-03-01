@@ -212,17 +212,24 @@ https://surrogate-model-selector.vercel.app/
 <img src="https://github.com/user-attachments/assets/a378d378-43cd-45c2-ac80-67eadf0b8190" width="500" alt="surrogate model selector">
 
 ## Installation
-To install NeuroBayes, use either
+
+You can install NeuroBayes using any of the following methods:
+
+### From PyPI (stable version, recommended)
+```bash
+pip install neurobayes
+```
+
+### From GitHub (latest updates)
+```bash
+pip install git+https://github.com/ziatdinovmax/NeuroBayes.git
+```
+
+### For development
 ```bash
 git clone https://github.com/ziatdinovmax/NeuroBayes.git
 cd NeuroBayes
 pip install -e .
-```
-
-or
-
-```bash
-pip install git+https://github.com/ziatdinovmax/NeuroBayes.git
 ```
 
 ## Citation
