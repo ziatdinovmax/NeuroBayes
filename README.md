@@ -68,6 +68,7 @@ The following examples demonstrate BNN and PBNN on toy problems:
 - Application of Partial and Full BNN to a regression problem: [notebook](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/partialBNN_simple_regression.ipynb)
 - Application of Full BNN to a classification problem: [notebook](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/bnn_simple_classification.ipynb)
 - Application of Partial BNN to a classification problem: [notebook](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/pbnn_simple_classification.ipynb)
+- Application of Partially Bayesian Transformer for molecular property prediction: [notebook](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/PartialBayesianTransformer_esol.ipynb)
 
 
 See also examples of BNN-powered active learning [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/bnn_example1d.ipynb) and PBNN-powered active learning [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/pbnn_example1d.ipynb).
