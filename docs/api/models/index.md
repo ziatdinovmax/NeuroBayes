@@ -1,6 +1,6 @@
 ---
 layout: default
-title: Models
+title: Models API
 parent: API Reference
 has_children: true
 ---
