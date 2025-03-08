@@ -3,6 +3,7 @@
 Script to generate API documentation for NeuroBayes using pydoc-markdown
 """
 import os
+import re
 import sys
 import subprocess
 
@@ -17,9 +18,16 @@ layout: default
 title: {title}
 parent: {parent}
 grand_parent: API Reference
+nav_exclude: false
 ---
 
+# {title} API Reference
+
+This page documents the technical specification for {title}.
+
 {content}
+
+For conceptual explanations and usage examples, see the [Conceptual Documentation](../../models/{module_short_name}.html).
 """
 
 # Create directories
@@ -48,6 +56,17 @@ This section provides detailed API documentation for NeuroBayes classes and func
 
 For conceptual explanations and usage examples, please refer to the corresponding sections in the main documentation.
 """)
+
+
+# Add this function to your generate_api_docs.py script
+def add_conceptual_links(content, module_short_name):
+    """Add links to conceptual documentation at appropriate points."""
+    # Find class definitions and add links after them
+    pattern = r"(## (\w+) Objects\n\n```python\nclass \2\(.*?\)```)"
+    replacement = r"\1\n\nFor detailed explanations and examples, see the [Conceptual Documentation](../../models/\L\2\E.html)."
+    content = re.sub(pattern, replacement, content, flags=re.DOTALL)
+    return content
+
 
 # Create category index files
 for category in categories:
@@ -107,10 +126,11 @@ for module_name, category, title in modules_to_document:
         output_file = os.path.join(output_dir, category, f"{module_short_name}.md")
         
         with open(output_file, "w") as f:
+            processed_content = add_conceptual_links(result.stdout, module_short_name)
             f.write(jekyll_template.format(
                 title=title,
                 parent=category.capitalize(),
-                content=result.stdout
+                content=processed_content
             ))
         print(f"Successfully generated docs for {module_name}")
     else:
