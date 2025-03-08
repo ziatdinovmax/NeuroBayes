@@ -68,6 +68,7 @@ The following examples demonstrate BNN and PBNN on toy problems:
 - Application of Partial and Full BNN to a regression problem: [notebook](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/partialBNN_simple_regression.ipynb)
 - Application of Full BNN to a classification problem: [notebook](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/bnn_simple_classification.ipynb)
 - Application of Partial BNN to a classification problem: [notebook](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/pbnn_simple_classification.ipynb)
+- Application of Partially Bayesian Transformer for molecular property prediction: [notebook](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/PartialBayesianTransformer_esol.ipynb)
 
 
 See also examples of BNN-powered active learning [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/bnn_example1d.ipynb) and PBNN-powered active learning [here](https://github.com/ziatdinovmax/NeuroBayes/blob/main/examples/pbnn_example1d.ipynb).
@@ -212,17 +213,24 @@ https://surrogate-model-selector.vercel.app/
 <img src="https://github.com/user-attachments/assets/a378d378-43cd-45c2-ac80-67eadf0b8190" width="500" alt="surrogate model selector">
 
 ## Installation
-To install NeuroBayes, use either
+
+You can install NeuroBayes using any of the following methods:
+
+### From PyPI (stable version, recommended)
+```bash
+pip install neurobayes
+```
+
+### From GitHub (latest updates)
+```bash
+pip install git+https://github.com/ziatdinovmax/NeuroBayes.git
+```
+
+### For development
 ```bash
 git clone https://github.com/ziatdinovmax/NeuroBayes.git
 cd NeuroBayes
 pip install -e .
-```
-
-or
-
-```bash
-pip install git+https://github.com/ziatdinovmax/NeuroBayes.git
 ```
 
 ## Citation
