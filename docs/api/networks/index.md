@@ -1,6 +1,6 @@
 ---
 layout: default
-title: Networks API
+title: Networks
 parent: API Reference
 has_children: true
 ---
