@@ -2,6 +2,7 @@ from .convnet import *
 from .mlp import *
 from .transformer import *
 from .deterministic_nn import *
+from .ensemble import EnsembleDeterministicNN
 from .splitter import *
 from .configs import *
 from .config_utils import *
