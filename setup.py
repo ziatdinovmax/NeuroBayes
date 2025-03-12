@@ -15,7 +15,7 @@ if __name__ == "__main__":
         name='NeuroBayes',
         python_requires='>=3.9',
         version=__version__,
-        description='Gaussian processes in NumPyro and JAX',
+        description='Fully and Partially Bayesian Neural Networks',
         long_description=open(os.path.join(module_dir, 'README.md')).read(),
         long_description_content_type='text/markdown',
         url='https://github.com/ziatdinovmax/NeuroBayes/',
