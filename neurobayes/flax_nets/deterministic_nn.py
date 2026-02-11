@@ -139,7 +139,7 @@ class DeterministicNN:
         y_batches = split_in_batches(y_train, batch_size)
         num_batches = len(X_batches)
         
-        with tqdm(total=epochs, desc="Training Progress", leave=True) as pbar:
+        with tqdm(total=epochs, desc="Training Progress", leave=True, disable=None) as pbar:
             for epoch in range(epochs):
                 collecting_grads = self.collect_gradients and epoch >= self.start_epoch
                 # Get learning rate and collection decision from schedule
